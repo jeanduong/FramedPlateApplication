@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<items version="2" >
+
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-media-compat/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="09b462bbcb77650284bd6614f1a32f360ef369f8">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-media-compat-24.2.1_a99913651a176d2bb6f7a64b8e4b3f00ecb9b7ea/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-v4/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="d7c42c80f6509b9ea4db28ca7859ffae08ec5741">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-v4-24.2.1_a863d7c964f5075c0efa1da37994cfc536e0de28/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-compat/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="0ecb4b595fa0f0f8018a149ace3ea6525624f94e">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-compat-24.2.1_9aeeb3f51b9427051ba0a0df69db15a3e054df1b/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-fragment/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="b9a1ac78ad7ef3abedc4a4b30cd92bcacb939d1f">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-fragment-24.2.1_5d1729a17d1ee197a16d7ce9b5b629f2fb6e0032/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/animated-vector-drawable/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="94bc1dfb84dcc8b6f6f8f7cc726d7b2dd39c1574">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-animated-vector-drawable-24.2.1_3bef55f4151ade45bb5e6a8fbc7ac4503360e44d/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-core-utils/24.2.1/jars/libs/internal_impl-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="935a969265b2a166b2d20415423f5f6e90fe16e0">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/internal_impl-24.2.1_c9519fac79d3c80ceb4c6e88f5bfce677153f46f/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-core-ui/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="e7f3132168957eefc46229fc32c3bd464642b71e">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-core-ui-24.2.1_329576a860b3116fa110024bdda45412192958d5/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/Library/Android/sdk/extras/android/m2repository/com/android/support/support-annotations/24.2.1/support-annotations-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="8de3aafecbdf98a61db6427f008f2d515bcd2544">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/support-annotations-24.2.1_8a025440294a4a2c4e1e7f251b7b4e24df268d74/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/incremental-classes/debug/instant-run-bootstrap.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="cf234de8eed85a5fe1e6bfa4b7fb568987290273">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/instant-run-bootstrap_c5b694596dde2cf54f50dfecc4a44631d1703e0d/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-core-ui/24.2.1/jars/libs/internal_impl-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="867dad63c33388ff8c7644b236579355036d075f">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/internal_impl-24.2.1_0f05ec586a86202382843f7d1a354bead13fddb2/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-fragment/24.2.1/jars/libs/internal_impl-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="5f64d657e838e8375135c0f6057a7ff8fab6a50e">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/internal_impl-24.2.1_f56f299cc39bfdf651c76f331cfb52a6f9e0d82a/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-media-compat/24.2.1/jars/libs/internal_impl-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="fbf8da429efd5ad21e02e3e5ecaa1efc4167878d">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/internal_impl-24.2.1_599b574866e814f220fa488d179892ecde5b8b74/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-vector-drawable/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="d5c731fc64c03dfe04d51134955b483551c35849">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-vector-drawable-24.2.1_a848f8f9f99a127a93e4d3dbe17469f227bb17f6/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/incremental-runtime-classes/debug/instant-run.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="ea99b1280d3ade1ad946f426acb201c5a616373e">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/instant-run_399191052ba8ec8bc57ec7f534443917272e0974/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-core-utils/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="9c4c3bc902450c39ed54de170db4fb12aea20a35">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-support-core-utils-24.2.1_5872ba69ebaed146e7b8e4c3e29d71988c0492ac/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/support-compat/24.2.1/jars/libs/internal_impl-24.2.1.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="7e4389bd133359a2ff88623ff1e4ff93d6e6f780">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/internal_impl-24.2.1_560da375709e68ecfe724ee7ca8e7af1baff3c35/classes.dex" />
+    </item>
+    <item
+        is-multidex="true"
+        jar="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/exploded-aar/com.android.support/appcompat-v7/24.2.1/jars/classes.jar"
+        jumboMode="true"
+        optimize="true"
+        revision="23.0.3"
+        sha1="43b2dba6b5a0b14527961b75329d0b90025f15ea">
+        <dex dex="/Users/jeanduong/AndroidStudioProjects/FramedPlateApplication/app/build/intermediates/transforms/dex/debug/folders/1000/10/com.android.support-appcompat-v7-24.2.1_b7e0ade30f61f6020a41e6a0e28146e41f124029/classes.dex" />
+    </item>
+
+</items>
