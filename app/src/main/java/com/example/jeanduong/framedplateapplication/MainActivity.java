@@ -40,8 +40,9 @@ public class MainActivity extends Activity {
         vw.setImageBitmap(img);
 
         // This part works fine!
+        // The purpose was to show how poor the OCR output may be without some image processing
         // Disable it to focus on OpenCV stuffs (in another activity).
-
+/*
         tess_engine = new TessBaseAPI();
         datapath = getFilesDir() + "/tesseract/";
 
@@ -57,7 +58,7 @@ public class MainActivity extends Activity {
 
         // Print text in IDE output console
         Log.i(TAG, txt);
-
+*/
     }
 
     private void copyFiles() {

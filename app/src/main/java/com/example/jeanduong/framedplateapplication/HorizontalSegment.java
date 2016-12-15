@@ -51,12 +51,4 @@ public class HorizontalSegment {
                 '}';
     }
 }
- class HorizontalSegmentOrdinateComparator implements Comparator<HorizontalSegment>{
-     @Override
-     public int compare(HorizontalSegment s1, HorizontalSegment s2) {
-         if (s1.ordinate < s2.ordinate)
-             return 1;
-         else
-             return -1;
-     }
- }
+

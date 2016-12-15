@@ -3,15 +3,13 @@ package com.example.jeanduong.framedplateapplication;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
+import android.graphics.Rect;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.ImageView;
 import android.widget.Toast;
 
-import com.googlecode.leptonica.android.Scale;
 import com.googlecode.tesseract.android.TessBaseAPI;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -25,10 +23,9 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfKeyPoint;
 import org.opencv.core.Point;
-import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.features2d.FeatureDetector;
-import org.opencv.features2d.Features2d;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
@@ -37,23 +34,19 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static java.lang.Math.PI;
 import static java.lang.Math.abs;
-import static java.lang.Math.cos;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
-import static java.lang.Math.sin;
+import static org.opencv.core.Core.bitwise_not;
+import static org.opencv.imgproc.Imgproc.MORPH_RECT;
 
 public class GrayActivity extends AppCompatActivity {
     static final String TAG = "OCR over gray";
@@ -101,6 +94,11 @@ public class GrayActivity extends AppCompatActivity {
         }
     }
 
+    public enum Field_type
+    {
+        SYMBOLE, SERIAL, MANUFACTURING, WARRANTY, COMMISSION
+    }
+
     private void torture()
     {
         ///////////
@@ -133,21 +131,21 @@ public class GrayActivity extends AppCompatActivity {
         // MSER detection //
         ////////////////////
 
-        MatOfKeyPoint mokp = new MatOfKeyPoint();
+        MatOfKeyPoint mat_mser_keypoints = new MatOfKeyPoint();
         FeatureDetector detector = FeatureDetector.create(FeatureDetector.MSER);
 
-        detector.detect(mat_lprime, mokp);
+        detector.detect(mat_lprime, mat_mser_keypoints);
 
-        Log.i(TAG, "|MSER| = " + mokp.rows());
+        Log.i(TAG, "MSER ZOIs : " + mat_mser_keypoints.rows());
 
-        KeyPoint[] aokp = mokp.toArray();
-        LinkedList<android.graphics.Rect> mser_rcts = new LinkedList<android.graphics.Rect>();
-        MatOfDouble sample_sizes = new MatOfDouble(aokp.length, 1);
-        double[] mser_size_array = new double[aokp.length];
+        KeyPoint[] array_mser_keypoints = mat_mser_keypoints.toArray();
+        LinkedList<Rect> mser_zois = new LinkedList<Rect>();
+        MatOfDouble mser_radii_sample = new MatOfDouble(array_mser_keypoints.length, 1);
+        double[] mser_radii_array = new double[array_mser_keypoints.length];
 
-        for (int k = 0; k < aokp.length; ++k)
+        for (int k = 0; k < array_mser_keypoints.length; ++k)
         {
-            KeyPoint kp = aokp[k];
+            KeyPoint kp = array_mser_keypoints[k];
             int half_size = (int)(kp.size / 2.0);
             Point pt = kp.pt;
             int x = (int) pt.x;
@@ -158,30 +156,27 @@ public class GrayActivity extends AppCompatActivity {
             int t = (int) max(0, y - half_size);
             int b = (int) min(h - 1, y + half_size);
 
-            sample_sizes.put(k, 0, kp.size);
-
-            mser_size_array[k] = kp.size;
-
-            mser_rcts.add(new android.graphics.Rect(l, t, r, b));
-            //Imgproc.rectangle(mat_lprime, new Point((int)(pt.x - half_size), (int)(pt.y - half_size)), new Point((int)(pt.x + half_size), (int)(pt.y + half_size)), new Scalar(0));
+            mser_radii_sample.put(k, 0, kp.size);
+            mser_radii_array[k] = kp.size;
+            mser_zois.add(new Rect(l, t, r, b));
         }
 
         MatOfDouble sample_sizes_mean = new MatOfDouble();
-        Core.meanStdDev(sample_sizes, sample_sizes_mean, new MatOfDouble());
+        Core.meanStdDev(mser_radii_sample, sample_sizes_mean, new MatOfDouble());
 
-        Arrays.sort(mser_size_array);
-        double mser_size_med = mser_size_array[(int)(mser_size_array.length / 2)];
+        Arrays.sort(mser_radii_array);
+        double mser_size_med = mser_radii_array[(int)(mser_radii_array.length / 2)];
 
         // Gathering rectangles
+
+        mser_zois = Gather_heuristic(mser_zois);
+
+        Log.i(TAG, "MSER ZOIs : " + mser_zois.size() + " (after fusion)");
 /*
-        LinkedList<android.graphics.Rect> zois = Gather_heuristic(mser_rcts);
-
-        Log.i(TAG, "Remains " + zois.size() + " ZOIs");
-
-        for (int k = 0; k < zois.size(); ++k)
+        for (int k = 0; k < mser_zois.size(); ++k)
         {
-            android.graphics.Rect z = zois.get(k);
-            Imgproc.rectangle(mat_lprime, new Point(z.left, z.top), new Point(z.right, z.bottom), new Scalar(255));
+            android.graphics.Rect z = mser_zois.get(k);
+            Imgproc.rectangle(mat_lprime, new Point(z.left, z.top), new Point(z.right, z.bottom), new Scalar(255), 5);
         }
 */
         ////////////////////
@@ -270,114 +265,354 @@ public class GrayActivity extends AppCompatActivity {
 
         Collections.sort(positive_segments, new HorizontalSegmentOrdinateComparator());
 
-        Log.i(TAG, "Hough detector : " + h_pos_segments.rows() + " positive line(s) found (" + positive_segments.size() + " horizontal)");
-        Log.i(TAG, "Hough detector : " + h_neg_segments.rows() + " negative line(s) found (" + negative_segments.size() + " horizontal)");
+        Log.d(TAG, "Hough detector : " + h_pos_segments.rows() + " positive line(s) found (" + positive_segments.size() + " horizontal)");
+        Log.d(TAG, "Hough detector : " + h_neg_segments.rows() + " negative line(s) found (" + negative_segments.size() + " horizontal)");
 
         ////////////////////////
         // Make solid streams //
         ////////////////////////
 
-        LinkedList<android.graphics.Rect> solid_streams = new LinkedList<android.graphics.Rect>();
+        LinkedList<Rect> solid_streams = new LinkedList<Rect>();
         boolean[] free_flags = new boolean[h_pos_segments.rows()];
 
         Arrays.fill(free_flags, true);
-        double ordinate_bound = h - 1;
+        double ordinate_floor = 0;
 
         // Try each up-oriented segment
         for (int n = 0; n < negative_segments.size(); ++n)
         {
             HorizontalSegment neg_seg = negative_segments.get(n);
-            double neg_alt = neg_seg.getOrdinate();
+            double neg_ord = neg_seg.getOrdinate();
 
-            if (neg_alt < ordinate_bound)
+            if (neg_ord > ordinate_floor)
             {
-
                 double neg_left = neg_seg.getLeft();
                 double neg_right = neg_seg.getRight();
 
-
                 // Search the closest down-oriented segment
                 int id_closest = -1;
-                double smallest_distance = h;
+                double smallest_distance = Double.POSITIVE_INFINITY;
 
                 for (int p = 0; p < positive_segments.size(); ++p)
-                    if (free_flags[p]) {
+                {
+                    if (free_flags[p])
+                    {
                         HorizontalSegment pos_seg = positive_segments.get(p);
-                        double pos_alt = pos_seg.getOrdinate();
-                        double distance = pos_alt - neg_alt + 1;
+                        double pos_ord = pos_seg.getOrdinate();
 
-                        if (distance > 0.0) {
+                        if (pos_ord > neg_ord)
+                        {
+                            double distance = pos_ord - neg_ord + 1;
                             double pos_left = pos_seg.getLeft();
                             double pos_right = pos_seg.getRight();
 
                             if ((distance < smallest_distance) &&
                                     (((pos_left > neg_left) && (pos_left < neg_right)) ||
-                                            ((pos_right > neg_left) && (pos_right < neg_right)))) {
+                                            ((pos_right > neg_left) && (pos_right < neg_right))))
+                            {
                                 smallest_distance = distance;
                                 id_closest = p;
                             }
-                        }
+                        } else
+                            free_flags[p] = false;
                     }
+                }
 
-                if ((id_closest >= 0) && (smallest_distance < 2 * mser_size_med)) {
+                // Found candidate
+                if ((id_closest >= 0) && (smallest_distance < 2 * mser_size_med))
+                {
                     HorizontalSegment pos_seg = positive_segments.get(id_closest);
+                    int pos_ord = (int)pos_seg.getOrdinate();
 
-                    solid_streams.add(new android.graphics.Rect(0, (int) neg_alt, w - 1,
-                            (int) pos_seg.getOrdinate()));
-
+                    solid_streams.add(new Rect(0, (int) neg_ord, w - 1, pos_ord));
                     free_flags[id_closest] = false;
-                    ordinate_bound = pos_seg.getOrdinate();
+                    ordinate_floor = pos_ord;
                 }
             }
         }
 
         Log.i(TAG, "Solid streams : " + solid_streams.size());
 
-        LinkedList<android.graphics.Rect> tmp = Gather_intersection_ultimate(solid_streams);
-
-        solid_streams.clear();
-        solid_streams.addAll(tmp);
-
-        for (int k = 0; k < solid_streams.size(); ++k)
-        {
-            android.graphics.Rect r = solid_streams.get(k);
-
-            Imgproc.rectangle(mat_lprime, new Point(r.left, r.top),
-                    new Point(r.right, r.bottom), new Scalar(255), 5);
-
-            System.out.println(r);
-        }
+        solid_streams = Gather_intersection_ultimate(solid_streams);
 
         Log.i(TAG, "Solid streams : " + solid_streams.size() + " (after fusion)");
 
+        ///////////////////////////////////
+        // Combination with MSER regions //
+        ///////////////////////////////////
 
-        // Distance transform
-/*
-        Mat mat_dst = new Mat(h, w, CvType.CV_8UC1);
+        int[] overlap_areas = new int[mser_zois.size()];
+        int[] overlap_argmax = new int[mser_zois.size()];
 
-        Imgproc.distanceTransform(mat_bin, mat_dst, Imgproc.CV_DIST_L2, 3);
-        Core.MinMaxLocResult mm = Core.minMaxLoc(mat_dst);
+        Arrays.fill(overlap_areas, 0);
+        Arrays.fill(overlap_argmax, 0);
 
-        int min_val = (int) mm.minVal;
-        int max_val = (int) mm.maxVal;
+        for (int s = 1; s < solid_streams.size(); ++s)
+        {
+            Rect r = new Rect(0, solid_streams.get(s - 1).bottom, w - 1, solid_streams.get(s).top);
 
-        Log.i(TAG, "Minimal distance = " + min_val);
-        Log.i(TAG, "Maximal distance = " + max_val);
-*/
+            for (int m = 0; m < mser_zois.size(); ++m)
+            {
+                Rect z = new Rect(mser_zois.get(m));
+
+                if (z.intersect(r))
+                {
+                    int area = z.width() * z.height();
+
+                    if (area > overlap_areas[m])
+                    {
+                        overlap_areas[m] = area;
+                        overlap_argmax[m] = s - 1;
+                    }
+                }
+            }
+        }
+
+        LinkedList<Rect> text_zois = new LinkedList<Rect>();
+
+        for (int m = 0; m < mser_zois.size(); ++m)
+        {
+            Rect rct = mser_zois.get(m);
+            int id = overlap_argmax[m];
+
+            text_zois.add(new Rect(rct.left, solid_streams.get(id).bottom,
+                    rct.right, solid_streams.get(id + 1).top));
+        }
+
+
+        /////////////////////////////////////////////////
+        // Binarization thresholds along solid streams //
+        /////////////////////////////////////////////////
+
+        Collections.sort(solid_streams, new RectTopComparator());
+
+        LinkedList<Rect> extended_streams = new LinkedList<Rect>();
+        LinkedList<double[]> local_thresholds = new LinkedList<double[]>();
+
+        for (int k = 0; k < solid_streams.size(); ++k)
+        {
+            Rect str = solid_streams.get(k);
+            double[] thresholds = new double[w];
+
+            Arrays.fill(thresholds, 0);
+
+            // Extend streams to double thickness if possible
+
+            final int height = str.height();
+            final int half_height = (int) (height / 2.0);
+            final int double_height = height * 2;
+            int original_upper_bound = str.top;
+            int original_lower_bound = str.bottom;
+            int extended_upper_bound = original_upper_bound;
+            int extended_lower_bound = original_lower_bound;
+
+            if (original_upper_bound > half_height) extended_upper_bound -= half_height;
+            else extended_upper_bound = 0;
+
+            extended_lower_bound += double_height - (extended_lower_bound - extended_upper_bound + 1);
+            extended_lower_bound = min(h - 1, extended_lower_bound);
+            extended_streams.add(new Rect(0, extended_upper_bound, w - 1, extended_lower_bound));
+
+            // Minimal and maximal luminance values within extended stream to "seed" bipartition
+
+            double seed_dark = Double.POSITIVE_INFINITY;
+            double seed_bright = 0.0;
+
+            for (int r = extended_upper_bound; r <= extended_lower_bound; ++r)
+                for (int c = 0; c < w; ++c)
+                {
+                    final double val = mat_lprime.get(r, c)[0];
+
+                    seed_dark = min(seed_dark, val);
+                    seed_bright = max(seed_bright, val);
+                }
+
+            // Threshold computation for each abscissa using 2-means
+            // Abscissa where computation failed re-processed further
+
+            for (int c = 0; c < w; ++c)
+            {
+                int nb_loops = 1;
+                int nb_dark = 0;
+                int nb_bright = 0;
+                double cumul_dark = 0.0;
+                double cumul_bright = 0.0;
+
+                double th = 0.0;
+
+                // First loop of 2_means
+                for (int r = extended_upper_bound; r <= extended_lower_bound; ++r)
+                {
+
+                    final double val = mat_lprime.get(r, c)[0];
+
+                    if (abs(val - seed_dark) < abs(val - seed_bright))
+                    {
+                        cumul_dark += val;
+                        ++nb_dark;
+                    }
+                    else
+                    {
+                        cumul_bright += val;
+                        ++nb_bright;
+                    }
+                }
+
+                // Not everything ending in one class -> more loops needed
+                if ((nb_dark > 0) && (nb_bright > 0))
+                {
+                    double centroid_dark  = cumul_dark / nb_dark;
+                    double centroid_bright = cumul_bright / nb_bright;
+                    double new_th = (centroid_dark + centroid_bright) / 2.0;
+
+                    while ((new_th != th) && (nb_loops < double_height))
+                    {
+                        th = new_th;
+
+                        nb_dark = 0;
+                        nb_bright = 0;
+                        cumul_dark = 0.0;
+                        cumul_bright = 0.0;
+
+                        for (int r = extended_upper_bound; r <= extended_lower_bound; ++r)
+                        {
+                            final double val = mat_lprime.get(r, c)[0];
+
+                            if (abs(val - centroid_dark) < abs(val - centroid_bright))
+                            {
+                                cumul_dark += val;
+                                ++nb_dark;
+                            }
+                            else
+                            {
+                                cumul_bright += val;
+                                ++nb_bright;
+                            }
+                        }
+
+                        centroid_dark = cumul_dark / nb_dark;
+                        centroid_bright = cumul_bright / nb_bright;
+                        new_th = (centroid_dark + centroid_bright) / 2.0;
+
+                        ++nb_loops;
+                    }
+
+                seed_dark = centroid_dark;
+                seed_bright = centroid_bright;
+                }
+
+                thresholds[c] = th;
+            }
+
+            // Right (resp. left) bound for leftmost (resp. rightmost)
+            // residues, i.e. portions where threshold computation failed
+            int c_left = 0;
+            int c_right = w - 1;
+
+            while (thresholds[c_left] == 0.0) ++c_left;
+            while (thresholds[c_right] == 0.0) --c_right;
+
+            for (int c = 0; c < c_left; ++c) thresholds[c] = thresholds[c_left];
+            for (int c = c_right + 1; c < w; ++c) thresholds[c] = thresholds[c_right];
+
+            // Estimate thresholds for residues using linear interpolation
+
+            boolean within_residue = false;
+            int portion_left_bound = c_left; // 'int' safer for substraction
+
+            for (int c = c_left; c <= c_right; ++c)
+            {
+                if ((thresholds[c] == 0.0) && !within_residue)
+                {
+                    within_residue = true;
+                    portion_left_bound = c;
+                }
+                else if ((thresholds[c] != 0.0) && within_residue)
+                {
+                    within_residue = false;
+
+                    final double delta = (thresholds[c - 1] - thresholds[portion_left_bound]) / (c - 1 - portion_left_bound + 1);
+
+                    for (int cc = portion_left_bound; cc < c; ++cc)
+                        thresholds[cc] = thresholds[cc - 1] + delta;
+                }
+            }
+
+            local_thresholds.add(thresholds);
+        }
+
+        ///////////////////////////////////////////
+        // Binarization between extended streams //
+        ///////////////////////////////////////////
+
+        Mat mat_bin = new Mat(h, w, CvType.CV_8UC1);
+
+        for (int k = 1; k < extended_streams.size(); ++k)
+        {
+            // Bounds for region to binarize
+            final int upper_bound = extended_streams.get(k - 1).bottom;
+            final int lower_bound = extended_streams.get(k).top;
+            // Local binarization thresholds
+            final double[] th_upper = local_thresholds.get(k - 1);
+            final double[] th_lower = local_thresholds.get(k);
+
+            for (int c = 0; c < w; ++c)
+            {
+                final double th = (th_upper[c] + th_lower[c]) / 2.0;
+
+                //Log.i(TAG, "th = " + th);
+
+                for (int r = upper_bound; r <= lower_bound; ++r)
+                    if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 0);
+                    else mat_bin.put(r, c, 255);
+            }
+        }
+
+        Mat mask = new Mat(h, w, CvType.CV_8UC1, new Scalar(0));
+
+        for (int k = 0; k < text_zois.size(); ++k)
+        {
+            Rect rct = text_zois.get(k);
+
+            for (int r = rct.top; r <= rct.bottom; ++r)
+                for (int c = rct.left; c <= rct.right; ++c)
+                    mask.put(r, c, 255);
+        }
+
+        Mat mat_frankenstein = new Mat(h, w, CvType.CV_8UC1, new Scalar(255));
+
+        mat_bin.copyTo(mat_frankenstein, mask);
+
+        mat_frankenstein.copyTo(mat_bin);
+        bitwise_not(mat_frankenstein, mat_frankenstein);
+
+        Mat lateralStructure = Imgproc.getStructuringElement(MORPH_RECT, new Size(3 * (int)mser_size_med, 1));
+
+        Imgproc.erode(mat_frankenstein, mat_frankenstein, lateralStructure, new Point(-1, -1), 1);
+        Imgproc.dilate(mat_frankenstein, mat_frankenstein, lateralStructure, new Point(-1, -1), 1);
+
+        bitwise_not(mat_frankenstein, mask);
+
+        mat_bin.copyTo(mat_frankenstein, mask);
 
         ///////////////////////
         // Display new image //
         ///////////////////////
 
         Bitmap img_out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(mat_lprime, img_out);
+        //Utils.matToBitmap(mat_lprime, img_out);
         //Utils.matToBitmap(mat_edges, img_out);
+        //Utils.matToBitmap(mat_bin, img_out);
+        //Utils.matToBitmap(mask, img_out);
+        Utils.matToBitmap(mat_frankenstein, img_out);
         ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
         mat_lprime.release(); // May make the app crash
 
-        // Text extraction
-        /*
+        //////////////////////////////
+        // Run OCR and extract data //
+        //////////////////////////////
+
         tess_engine = new TessBaseAPI();
         datapath = getFilesDir() + "/tesseract/";
 
@@ -387,14 +622,215 @@ public class GrayActivity extends AppCompatActivity {
         tess_engine.init(datapath, lang);
         tess_engine.setImage(img_out);
 
-        String txt = tess_engine.getUTF8Text();
+        // Arrange zones to retrieve text lines (with reading order for data extraction)
+        LinkedList<LinkedList<Rect>> ordered_text_zois = LexicographicAntichains(text_zois);
+
+        CustomRegexToolbox rx = new CustomRegexToolbox();
+
+        String symbole = new String();
+        String serial = new String();
+        String manufacturer = new String();
+        String warranty = new String();
+        String commission = new String();
+
+        boolean symbole_found = false;
+        boolean serial_found = false;
+        boolean manufacturing_found = false;
+        boolean warranty_found = false;
+        boolean commission_found = false;
+
+        for (int l = 0; l < ordered_text_zois.size(); ++l)
+        {
+            LinkedList<Rect> text_line = ordered_text_zois.get(l);
+            LinkedList<String> strings = new LinkedList<String>();
+            int nb_zones = text_line.size();
+
+            int symbole_search_pos = nb_zones;
+            int serial_search_pos = nb_zones;
+            int manufacturing_search_pos = nb_zones;
+            int warranty_search_pos = nb_zones;
+            int commission_search_pos = nb_zones;
+
+            // Find prefixes and try to extract data in same zone
+
+            for (int z = 0; z < nb_zones; ++z)
+            {
+                tess_engine.setRectangle(text_line.get(z));
+                String str = tess_engine.getUTF8Text();
+                String l_str = str.toLowerCase(); // Lower case version to search prefixes
+                strings.add(str);
+                Matcher prefix_matcher;
+
+                prefix_matcher = Pattern.compile(rx.getSymbole_prefix()).matcher(l_str);
+
+                if (!symbole_found && prefix_matcher.find())
+                {
+                    String sstr = str.substring(prefix_matcher.end());
+                    Matcher mc = Pattern.compile(rx.getGetSymbole_base()).matcher(sstr);
+
+                    if (mc.find())
+                    {
+                        symbole = sstr.substring(mc.start(), mc.end());
+                        symbole_found = true;
+                    }
+                    else symbole_search_pos = z + 1;
+                }
+
+                prefix_matcher = Pattern.compile(rx.getSerial_prefix()).matcher(l_str);
+
+                if (!serial_found && prefix_matcher.find())
+                {
+                    String sstr = str.substring(prefix_matcher.end());
+                    Matcher mc = Pattern.compile(rx.getSerial_base()).matcher(sstr);
+
+                    if (mc.find())
+                    {
+                        serial = sstr.substring(mc.start(), mc.end());
+                        serial_found = true;
+                    }
+                    else serial_search_pos = z + 1;
+                }
+
+                prefix_matcher = Pattern.compile(rx.getManufacturer_prefix()).matcher(l_str);
+
+                if (!manufacturing_found && prefix_matcher.find())
+                {
+                    String sstr = str.substring(prefix_matcher.end());
+                    Matcher mc = Pattern.compile(rx.getGetManufacturer_base()).matcher(sstr);
+
+                    if (mc.find())
+                    {
+                        manufacturer = sstr.substring(mc.start(), mc.end());
+                        manufacturing_found = true;
+                    }
+                    else manufacturing_search_pos = z + 1;
+                }
+
+                prefix_matcher = Pattern.compile(rx.getWarranty_prefix()).matcher(l_str);
+
+                if (!warranty_found && prefix_matcher.find())
+                {
+                    String sstr = str.substring(prefix_matcher.end());
+                    Matcher mc = Pattern.compile(rx.getGetWarranty_base()).matcher(sstr);
+
+                    if (mc.find())
+                    {
+                        warranty = sstr.substring(mc.start(), mc.end());
+                        warranty_found = true;
+                    }
+                    else warranty_search_pos = z + 1;
+                }
+
+                prefix_matcher = Pattern.compile(rx.getCommission_prefix()).matcher(l_str);
+
+                if (!commission_found && prefix_matcher.find())
+                {
+                    String sstr = str.substring(prefix_matcher.end());
+                    Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(sstr);
+
+                    if (mc.find())
+                    {
+                        commission = sstr.substring(mc.start(), mc.end());
+                        commission_found = true;
+                    }
+                    else commission_search_pos = z + 1;
+                }
+            }
+
+            // Try to search data in zones right to prefix
+
+            if (symbole_search_pos < nb_zones)
+            {
+                String str = strings.get(symbole_search_pos);
+                Matcher mc = Pattern.compile(rx.getGetSymbole_base()).matcher(str);
+
+                if (mc.find())
+                {
+                    symbole = str.substring(mc.start(), mc.end());
+                    symbole_found = true;
+                }
+            }
+
+            if (serial_search_pos < nb_zones)
+            {
+                String str = strings.get(serial_search_pos);
+                Matcher mc = Pattern.compile(rx.getSerial_base()).matcher(str);
+
+                if (mc.find())
+                {
+                    serial = str.substring(mc.start(), mc.end());
+                    serial_found = true;
+                }
+            }
+
+            if (manufacturing_search_pos < nb_zones)
+            {
+                String str = strings.get(manufacturing_search_pos);
+                Matcher mc = Pattern.compile(rx.getGetManufacturer_base()).matcher(str);
+
+                if (mc.find())
+                {
+                    manufacturer = str.substring(mc.start(), mc.end());
+                    manufacturing_found = true;
+                }
+            }
+
+            if (warranty_search_pos < nb_zones)
+            {
+                String str = strings.get(warranty_search_pos);
+                Matcher mc = Pattern.compile(rx.getGetWarranty_base()).matcher(str);
+
+                if (mc.find())
+                {
+                    warranty = str.substring(mc.start(), mc.end());
+                    warranty_found = true;
+                }
+            }
+
+            if (commission_search_pos < nb_zones)
+            {
+                String str = strings.get(commission_search_pos);
+                Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(str);
+
+                if (mc.find())
+                {
+                    commission = str.substring(mc.start(), mc.end());
+                    commission_found = true;
+                }
+            }
+
+            // Desperate attempt to date data without prefix
+
+            for (int s = 0; s < nb_zones; ++s)
+            {
+                String str = strings.get(s);
+
+                if (!commission_found)
+                {
+                    Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(str);
+
+                    if (mc.find())
+                    {
+                        commission = str.substring(mc.start(), mc.end());
+                        commission_found = true;
+                    }
+                }
+            }
+
+        }
 
         tess_engine.end();
 
+        System.out.println("symbol           : " + symbole);
+        System.out.println("serial           : " + serial);
+        System.out.println("manufacturing id : " + manufacturer);
+        System.out.println("warranty         : " + warranty);
+        System.out.println("commission       : " + commission);
+
         //img_gray.recycle(); // Sometimes make the app crash
         // Print text in IDE output console
-        Log.i(TAG, txt);
-        */
+        //System.out.println("OCR output over binary image:\n\n" + txt);
+
     }
 
     private Mat MakeLPrime(Mat mat_rgb)
@@ -612,4 +1048,70 @@ public class GrayActivity extends AppCompatActivity {
 
         return res;
     }
+
+    private LinkedList<LinkedList<android.graphics.Rect>> LexicographicAntichains(LinkedList<android.graphics.Rect> rectangles)
+    {
+        int nb_rectangles = rectangles.size();
+        LinkedList<LinkedList<android.graphics.Rect>> antichains = new LinkedList<LinkedList<android.graphics.Rect>>();
+        LinkedList<android.graphics.Rect> residue_rcts = new LinkedList<android.graphics.Rect>();
+        LinkedList<android.graphics.Rect> remaining_rcts = new LinkedList<android.graphics.Rect>(rectangles);
+
+        // Search successive antichains of minimal rectangles for top-down order
+        while (!remaining_rcts.isEmpty())
+        {
+            LinkedList<android.graphics.Rect> upper_rcts = new LinkedList<android.graphics.Rect>();
+
+            for (int k = 0; k < remaining_rcts.size(); ++k)
+            {
+                android.graphics.Rect ref_rct = remaining_rcts.get(k);
+
+                int kk = 0;
+                boolean status = true;
+
+                while (status && (kk < remaining_rcts.size()))
+                {
+                    if (kk != k)
+                        status = !(ref_rct.top > remaining_rcts.get(kk).bottom);
+
+                    ++kk;
+                }
+
+                if (status)
+                    upper_rcts.add(new android.graphics.Rect(ref_rct));
+                else
+                    residue_rcts.add(new android.graphics.Rect(ref_rct));
+            }
+
+            Collections.sort(upper_rcts, new RectLeftComparator());
+            antichains.add(upper_rcts);
+
+            remaining_rcts.clear();
+            remaining_rcts.addAll(residue_rcts);
+            residue_rcts.clear();
+        }
+
+        return  antichains;
+    }
 }
+
+class HorizontalSegmentOrdinateComparator implements Comparator<HorizontalSegment>{
+    @Override
+    public int compare(HorizontalSegment s1, HorizontalSegment s2) {
+        return (int)(s1.ordinate - s2.ordinate);
+    }
+}
+
+class RectTopComparator implements Comparator<android.graphics.Rect>{
+    @Override
+    public int compare(android.graphics.Rect r1, android.graphics.Rect r2) {
+        return (int)(r1.top - r2.top);
+    }
+}
+
+class RectLeftComparator implements Comparator<android.graphics.Rect>{
+    @Override
+    public int compare(android.graphics.Rect r1, android.graphics.Rect r2) {
+        return (int)(r1.left - r2.left);
+    }
+}
+
