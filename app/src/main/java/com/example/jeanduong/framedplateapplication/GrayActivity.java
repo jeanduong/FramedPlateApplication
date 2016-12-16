@@ -1,5 +1,6 @@
 package com.example.jeanduong.framedplateapplication;
 
+import android.content.Intent;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -37,7 +38,9 @@ import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,6 +50,7 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.opencv.core.Core.bitwise_not;
 import static org.opencv.imgproc.Imgproc.MORPH_RECT;
+import static org.opencv.imgproc.Imgproc.connectedComponents;
 
 public class GrayActivity extends AppCompatActivity {
     static final String TAG = "OCR over gray";
@@ -172,13 +176,7 @@ public class GrayActivity extends AppCompatActivity {
         mser_zois = Gather_heuristic(mser_zois);
 
         Log.i(TAG, "MSER ZOIs : " + mser_zois.size() + " (after fusion)");
-/*
-        for (int k = 0; k < mser_zois.size(); ++k)
-        {
-            android.graphics.Rect z = mser_zois.get(k);
-            Imgproc.rectangle(mat_lprime, new Point(z.left, z.top), new Point(z.right, z.bottom), new Scalar(255), 5);
-        }
-*/
+
         ////////////////////
         // Edge detection //
         ////////////////////
@@ -379,7 +377,6 @@ public class GrayActivity extends AppCompatActivity {
                     rct.right, solid_streams.get(id + 1).top));
         }
 
-
         /////////////////////////////////////////////////
         // Binarization thresholds along solid streams //
         /////////////////////////////////////////////////
@@ -560,8 +557,6 @@ public class GrayActivity extends AppCompatActivity {
             {
                 final double th = (th_upper[c] + th_lower[c]) / 2.0;
 
-                //Log.i(TAG, "th = " + th);
-
                 for (int r = upper_bound; r <= lower_bound; ++r)
                     if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 0);
                     else mat_bin.put(r, c, 255);
@@ -605,9 +600,8 @@ public class GrayActivity extends AppCompatActivity {
         //Utils.matToBitmap(mat_bin, img_out);
         //Utils.matToBitmap(mask, img_out);
         Utils.matToBitmap(mat_frankenstein, img_out);
-        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
-        mat_lprime.release(); // May make the app crash
+        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
         //////////////////////////////
         // Run OCR and extract data //
@@ -634,10 +628,15 @@ public class GrayActivity extends AppCompatActivity {
         String commission = new String();
 
         boolean symbole_found = false;
-        boolean serial_found = false;
-        boolean manufacturing_found = false;
+        boolean manufacturer_found = false;
         boolean warranty_found = false;
         boolean commission_found = false;
+
+        LinkedList<Rect> serial_candidate_zois = new LinkedList<Rect>();
+
+        // Loop over all text regions to extract symbole, manufacturer, warranty and commission
+        // Serial id needs specific processing. It should not be extracted yet. Its anchor is
+        // used to quote zones to be further analyzed.
 
         for (int l = 0; l < ordered_text_zois.size(); ++l)
         {
@@ -646,103 +645,108 @@ public class GrayActivity extends AppCompatActivity {
             int nb_zones = text_line.size();
 
             int symbole_search_pos = nb_zones;
-            int serial_search_pos = nb_zones;
-            int manufacturing_search_pos = nb_zones;
+            int manufacturer_search_pos = nb_zones;
             int warranty_search_pos = nb_zones;
             int commission_search_pos = nb_zones;
 
-            // Find prefixes and try to extract data in same zone
+            boolean jump = false; // Skip anchor search for some regions
+
+            // Step 1: OCR and anchor + data detection in each region
 
             for (int z = 0; z < nb_zones; ++z)
             {
                 tess_engine.setRectangle(text_line.get(z));
                 String str = tess_engine.getUTF8Text();
-                String l_str = str.toLowerCase(); // Lower case version to search prefixes
+                String l_str = str.toLowerCase(); // Lower case to search anchors
                 strings.add(str);
-                Matcher prefix_matcher;
+                Matcher anchor_matcher;
 
-                prefix_matcher = Pattern.compile(rx.getSymbole_prefix()).matcher(l_str);
-
-                if (!symbole_found && prefix_matcher.find())
+                //if (jump)
+                //    jump = false;
+                //else
                 {
-                    String sstr = str.substring(prefix_matcher.end());
-                    Matcher mc = Pattern.compile(rx.getGetSymbole_base()).matcher(sstr);
+                    anchor_matcher = Pattern.compile(rx.getSerial_anchor()).matcher(l_str);
+                    // Serial id processing postponed. Zones with such anchor are stored for
+                    // specific analysis in further steps
+                    if (anchor_matcher.find())
+                        serial_candidate_zois.add(new Rect(text_line.get(z)));
 
-                    if (mc.find())
+                    anchor_matcher = Pattern.compile(rx.getSymbole_anchor()).matcher(l_str);
+
+                    if (!symbole_found && anchor_matcher.find())
                     {
-                        symbole = sstr.substring(mc.start(), mc.end());
-                        symbole_found = true;
+                        String sstr = str.substring(anchor_matcher.end());
+                        Matcher mc = Pattern.compile(rx.getSymbole_base()).matcher(sstr);
+
+                        if (mc.find()) {
+                            symbole = sstr.substring(mc.start(), mc.end());
+                            symbole_found = true;
+                        }
+                        else {
+                            symbole_search_pos = z + 1;
+                            jump = true;
+                        }
                     }
-                    else symbole_search_pos = z + 1;
-                }
 
-                prefix_matcher = Pattern.compile(rx.getSerial_prefix()).matcher(l_str);
+                    anchor_matcher = Pattern.compile(rx.getManufacturer_anchor()).matcher(l_str);
 
-                if (!serial_found && prefix_matcher.find())
-                {
-                    String sstr = str.substring(prefix_matcher.end());
-                    Matcher mc = Pattern.compile(rx.getSerial_base()).matcher(sstr);
-
-                    if (mc.find())
+                    if (!manufacturer_found && anchor_matcher.find())
                     {
-                        serial = sstr.substring(mc.start(), mc.end());
-                        serial_found = true;
+                        String sstr = str.substring(anchor_matcher.end());
+                        Matcher mc = Pattern.compile(rx.getManufacturer_base()).matcher(sstr);
+
+                        if (mc.find()) {
+                            manufacturer = sstr.substring(mc.start(), mc.end());
+                            manufacturer_found = true;
+                        }
+                        else {
+                            manufacturer_search_pos = z + 1;
+                            jump = true;
+                        }
                     }
-                    else serial_search_pos = z + 1;
-                }
 
-                prefix_matcher = Pattern.compile(rx.getManufacturer_prefix()).matcher(l_str);
+                    anchor_matcher = Pattern.compile(rx.getWarranty_anchor()).matcher(l_str);
 
-                if (!manufacturing_found && prefix_matcher.find())
-                {
-                    String sstr = str.substring(prefix_matcher.end());
-                    Matcher mc = Pattern.compile(rx.getGetManufacturer_base()).matcher(sstr);
-
-                    if (mc.find())
+                    if (!warranty_found && anchor_matcher.find())
                     {
-                        manufacturer = sstr.substring(mc.start(), mc.end());
-                        manufacturing_found = true;
+                        String sstr = str.substring(anchor_matcher.end());
+                        Matcher mc = Pattern.compile(rx.getWarranty_base()).matcher(sstr);
+
+                        if (mc.find()) {
+                            warranty = sstr.substring(mc.start(), mc.end());
+                            warranty_found = true;
+                        }
+                        else {
+                            warranty_search_pos = z + 1;
+                            jump = true;
+                        }
                     }
-                    else manufacturing_search_pos = z + 1;
-                }
 
-                prefix_matcher = Pattern.compile(rx.getWarranty_prefix()).matcher(l_str);
+                    anchor_matcher = Pattern.compile(rx.getCommission_anchor()).matcher(l_str);
 
-                if (!warranty_found && prefix_matcher.find())
-                {
-                    String sstr = str.substring(prefix_matcher.end());
-                    Matcher mc = Pattern.compile(rx.getGetWarranty_base()).matcher(sstr);
-
-                    if (mc.find())
+                    if (!commission_found && anchor_matcher.find())
                     {
-                        warranty = sstr.substring(mc.start(), mc.end());
-                        warranty_found = true;
+                        String sstr = str.substring(anchor_matcher.end());
+                        Matcher mc = Pattern.compile(rx.getCommission_base()).matcher(sstr);
+
+                        if (mc.find()) {
+                            commission = sstr.substring(mc.start(), mc.end());
+                            commission_found = true;
+                        }
+                        else {
+                            commission_search_pos = z + 1;
+                            jump = true;
+                        }
                     }
-                    else warranty_search_pos = z + 1;
-                }
-
-                prefix_matcher = Pattern.compile(rx.getCommission_prefix()).matcher(l_str);
-
-                if (!commission_found && prefix_matcher.find())
-                {
-                    String sstr = str.substring(prefix_matcher.end());
-                    Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(sstr);
-
-                    if (mc.find())
-                    {
-                        commission = sstr.substring(mc.start(), mc.end());
-                        commission_found = true;
-                    }
-                    else commission_search_pos = z + 1;
                 }
             }
 
-            // Try to search data in zones right to prefix
+            // Step 2: try to search data in zones right to anchor if not already found
 
             if (symbole_search_pos < nb_zones)
             {
                 String str = strings.get(symbole_search_pos);
-                Matcher mc = Pattern.compile(rx.getGetSymbole_base()).matcher(str);
+                Matcher mc = Pattern.compile(rx.getSymbole_base()).matcher(str);
 
                 if (mc.find())
                 {
@@ -751,34 +755,22 @@ public class GrayActivity extends AppCompatActivity {
                 }
             }
 
-            if (serial_search_pos < nb_zones)
+            if (manufacturer_search_pos < nb_zones)
             {
-                String str = strings.get(serial_search_pos);
-                Matcher mc = Pattern.compile(rx.getSerial_base()).matcher(str);
-
-                if (mc.find())
-                {
-                    serial = str.substring(mc.start(), mc.end());
-                    serial_found = true;
-                }
-            }
-
-            if (manufacturing_search_pos < nb_zones)
-            {
-                String str = strings.get(manufacturing_search_pos);
-                Matcher mc = Pattern.compile(rx.getGetManufacturer_base()).matcher(str);
+                String str = strings.get(manufacturer_search_pos);
+                Matcher mc = Pattern.compile(rx.getManufacturer_base()).matcher(str);
 
                 if (mc.find())
                 {
                     manufacturer = str.substring(mc.start(), mc.end());
-                    manufacturing_found = true;
+                    manufacturer_found = true;
                 }
             }
 
             if (warranty_search_pos < nb_zones)
             {
                 String str = strings.get(warranty_search_pos);
-                Matcher mc = Pattern.compile(rx.getGetWarranty_base()).matcher(str);
+                Matcher mc = Pattern.compile(rx.getWarranty_base()).matcher(str);
 
                 if (mc.find())
                 {
@@ -790,7 +782,7 @@ public class GrayActivity extends AppCompatActivity {
             if (commission_search_pos < nb_zones)
             {
                 String str = strings.get(commission_search_pos);
-                Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(str);
+                Matcher mc = Pattern.compile(rx.getCommission_base()).matcher(str);
 
                 if (mc.find())
                 {
@@ -799,7 +791,7 @@ public class GrayActivity extends AppCompatActivity {
                 }
             }
 
-            // Desperate attempt to date data without prefix
+            // Desperate attempt to extract date data without anchor
 
             for (int s = 0; s < nb_zones; ++s)
             {
@@ -807,7 +799,7 @@ public class GrayActivity extends AppCompatActivity {
 
                 if (!commission_found)
                 {
-                    Matcher mc = Pattern.compile(rx.getGetCommission_base()).matcher(str);
+                    Matcher mc = Pattern.compile(rx.getCommission_base()).matcher(str);
 
                     if (mc.find())
                     {
@@ -821,11 +813,158 @@ public class GrayActivity extends AppCompatActivity {
 
         tess_engine.end();
 
-        System.out.println("symbol           : " + symbole);
-        System.out.println("serial           : " + serial);
-        System.out.println("manufacturing id : " + manufacturer);
-        System.out.println("warranty         : " + warranty);
-        System.out.println("commission       : " + commission);
+        //////////////////////////////////////////
+        // Retrieve frame for serial identifier //
+        //////////////////////////////////////////
+
+        Mat cc_chart = new Mat(h, w, CvType.CV_8UC1);
+
+        for (int k = 0; k < serial_candidate_zois.size(); ++k)
+        {
+            Rect rct = serial_candidate_zois.get(k);
+            int top = rct.top;
+            int bottom = rct.bottom;
+            double distance_over = Double.POSITIVE_INFINITY;
+            double distance_under = Double.POSITIVE_INFINITY;
+
+            int id_ceil = 0;
+            int id_floor = 0;
+
+            for (int s = 0; s < solid_streams.size(); ++s)
+            {
+                Rect str = solid_streams.get(s);
+
+                if (str.top < top)
+                {
+                    double distance = top - str.bottom;
+
+                    if (distance < distance_over) {
+                        distance_over = distance;
+                        id_ceil = s;
+                    }
+                }
+                else if (str.bottom > bottom)
+                {
+                    double distance = str.top - bottom;
+
+                    if (distance < distance_under) {
+                        distance_under = distance;
+                        id_floor = s;
+                    }
+                }
+            }
+
+            Rect str_ceil = solid_streams.get(id_ceil);
+            Rect str_floor = solid_streams.get(id_floor);
+            Rect frm = new Rect(rct.left, str_ceil.top, rct.right, str_floor.bottom);
+
+            // Lateral expansion for frame
+
+            boolean expand = true;
+
+            while (expand)
+            {
+                expand = false;
+
+                int r = str_ceil.top;
+
+                while (!expand && (r <= str_ceil.bottom))
+                {
+                    expand = (mask.get(r, frm.left)[0] == 0);
+                    ++r;
+                }
+
+                r = str_floor.top;
+
+                while (!expand && (r <= str_floor.bottom))
+                {
+                    expand = (mask.get(r, frm.left)[0] == 0);
+                    ++r;
+                }
+
+                if (expand)
+                    --frm.left;
+            }
+
+            frm.left = max(frm.left, 0);
+            expand = true;
+
+            while (expand)
+            {
+                expand = false;
+
+                int r = str_ceil.top;
+
+                while (!expand && (r <= str_ceil.bottom))
+                {
+                    expand = (mask.get(r, frm.right)[0] == 0);
+                    ++r;
+                }
+
+                r = str_floor.top;
+
+                while (!expand && (r <= str_floor.bottom))
+                {
+                    expand = (mask.get(r, frm.right)[0] == 0);
+                    ++r;
+                }
+
+                if (expand)
+                    ++frm.right;
+            }
+
+            frm.right = min(frm.right, w - 1);
+
+            mat_bin.setTo(new Scalar(255));
+            double[] ceil_local_thresholds = local_thresholds.get(id_ceil);
+            double[] floor_local_thresholds = local_thresholds.get(id_floor);
+
+            for (int c = frm.left; c <= frm.right; ++c)
+            {
+                final double th = (ceil_local_thresholds[c] + floor_local_thresholds[c]) / 2.0;
+
+                for (int r = frm.top; r <= frm.bottom; ++r)
+                    if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 0);
+                    else mat_bin.put(r, c, 255);
+            }
+
+            int max_cc_label = connectedComponents(mat_bin, cc_chart);
+
+            Set<Integer> cc_touching_ceil = new HashSet<Integer>();
+            Set<Integer> cc_touching_both = new HashSet<Integer>();
+
+            for (int c = frm.left; c <= frm.right; ++c)
+                cc_touching_ceil.add((int)cc_chart.get(frm.top, c)[0]);
+
+            for (int c = frm.left; c <= frm.right; ++c)
+            {
+                int val = (int) cc_chart.get(frm.top, c)[0];
+
+                if (cc_touching_ceil.contains(val))
+                {
+                    cc_touching_both.add(val);
+                }
+            }
+
+            int nb_bars = cc_touching_both.size();
+
+            Log.d(TAG, "bars : " + nb_bars);
+        }
+
+
+
+        System.out.println("symbol          : " + symbole);
+        System.out.println("serial id       : " + serial);
+        System.out.println("manufacturer id : " + manufacturer);
+        System.out.println("warranty        : " + warranty);
+        System.out.println("commission      : " + commission);
+
+
+
+        Utils.matToBitmap(mat_bin, img_out);
+
+        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
+
 
         //img_gray.recycle(); // Sometimes make the app crash
         // Print text in IDE output console
