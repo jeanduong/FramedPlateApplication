@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -46,6 +47,7 @@ import java.util.regex.Pattern;
 
 import static java.lang.Math.PI;
 import static java.lang.Math.abs;
+import static java.lang.Math.exp;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.opencv.core.Core.bitwise_not;
@@ -440,7 +442,6 @@ public class GrayActivity extends AppCompatActivity {
                 // First loop of 2_means
                 for (int r = extended_upper_bound; r <= extended_lower_bound; ++r)
                 {
-
                     final double val = mat_lprime.get(r, c)[0];
 
                     if (abs(val - seed_dark) < abs(val - seed_bright))
@@ -494,8 +495,8 @@ public class GrayActivity extends AppCompatActivity {
                         ++nb_loops;
                     }
 
-                seed_dark = centroid_dark;
-                seed_bright = centroid_bright;
+                    seed_dark = centroid_dark;
+                    seed_bright = centroid_bright;
                 }
 
                 thresholds[c] = th;
@@ -528,7 +529,7 @@ public class GrayActivity extends AppCompatActivity {
                 {
                     within_residue = false;
 
-                    final double delta = (thresholds[c - 1] - thresholds[portion_left_bound]) / (c - 1 - portion_left_bound + 1);
+                    final double delta = (thresholds[c] - thresholds[portion_left_bound - 1]) / (c - 1 - portion_left_bound + 1);
 
                     for (int cc = portion_left_bound; cc < c; ++cc)
                         thresholds[cc] = thresholds[cc - 1] + delta;
@@ -830,6 +831,8 @@ public class GrayActivity extends AppCompatActivity {
             int id_ceil = 0;
             int id_floor = 0;
 
+            // Catch the solid streams "containing" candidate ZOI.
+
             for (int s = 0; s < solid_streams.size(); ++s)
             {
                 Rect str = solid_streams.get(s);
@@ -856,94 +859,126 @@ public class GrayActivity extends AppCompatActivity {
 
             Rect str_ceil = solid_streams.get(id_ceil);
             Rect str_floor = solid_streams.get(id_floor);
-            Rect frm = new Rect(rct.left, str_ceil.top, rct.right, str_floor.bottom);
 
-            // Lateral expansion for frame
-
-            boolean expand = true;
-
-            while (expand)
-            {
-                expand = false;
-
-                int r = str_ceil.top;
-
-                while (!expand && (r <= str_ceil.bottom))
-                {
-                    expand = (mask.get(r, frm.left)[0] == 0);
-                    ++r;
-                }
-
-                r = str_floor.top;
-
-                while (!expand && (r <= str_floor.bottom))
-                {
-                    expand = (mask.get(r, frm.left)[0] == 0);
-                    ++r;
-                }
-
-                if (expand)
-                    --frm.left;
-            }
-
-            frm.left = max(frm.left, 0);
-            expand = true;
-
-            while (expand)
-            {
-                expand = false;
-
-                int r = str_ceil.top;
-
-                while (!expand && (r <= str_ceil.bottom))
-                {
-                    expand = (mask.get(r, frm.right)[0] == 0);
-                    ++r;
-                }
-
-                r = str_floor.top;
-
-                while (!expand && (r <= str_floor.bottom))
-                {
-                    expand = (mask.get(r, frm.right)[0] == 0);
-                    ++r;
-                }
-
-                if (expand)
-                    ++frm.right;
-            }
-
-            frm.right = min(frm.right, w - 1);
-
-            mat_bin.setTo(new Scalar(255));
             double[] ceil_local_thresholds = local_thresholds.get(id_ceil);
             double[] floor_local_thresholds = local_thresholds.get(id_floor);
 
-            for (int c = frm.left; c <= frm.right; ++c)
+            int frame_left_bound = rct.left;
+            int frame_right_bound = rct.right;
+
+            // Lateral expansion for frame
+
+            boolean expand = (frame_left_bound > 0);
+            int c_backward = frame_left_bound - 1;
+
+            while (expand)
+            {
+                expand = false;
+
+                int r = str_ceil.top;
+                double th = ceil_local_thresholds[c_backward];
+
+                while (!expand && (r <= str_ceil.bottom))
+                {
+                    expand = (mat_lprime.get(r, c_backward)[0] < th);
+                    ++r;
+                }
+
+                r = str_floor.top;
+                th = floor_local_thresholds[c_backward];
+
+                while (!expand && (r <= str_floor.bottom))
+                {
+                    expand = (mat_lprime.get(r, c_backward)[0] < th);
+                    ++r;
+                }
+
+                if (expand)
+                {
+                    --frame_left_bound;
+                    --c_backward;
+                    expand = (c_backward >= 0);
+                }
+            }
+
+            expand = (frame_right_bound < w - 1);
+            int c_forward = frame_right_bound + 1;
+
+            while (expand)
+            {
+                expand = false;
+
+                int r = str_ceil.top;
+                double th = ceil_local_thresholds[c_forward];
+
+                while (!expand && (r <= str_ceil.bottom))
+                {
+                    expand = (mat_lprime.get(r, c_forward)[0] < th);
+                    ++r;
+                }
+
+                r = str_floor.top;
+                th = floor_local_thresholds[c_forward];
+
+                while (!expand && (r <= str_floor.bottom))
+                {
+                    expand = (mat_lprime.get(r, c_forward)[0] < th);
+                    ++r;
+                }
+
+                if (expand)
+                {
+                    ++frame_right_bound;
+                    ++c_forward;
+                    expand = (c_forward <= w - 1);
+                }
+
+
+                Log.d(TAG, "th    = " + th);
+
+            }
+
+
+            Log.d(TAG, "left  = " + frame_left_bound);
+            Log.d(TAG, "right = " + frame_right_bound);
+            Log.d(TAG, "width = " + w);
+
+            // Partial binary image
+            //
+            // Warning : FOREGROUND should be WHITE for component analysis with OpenCV!!!!!!!!!
+
+            mat_bin.setTo(new Scalar(0));
+
+            for (int c = frame_left_bound; c <= frame_right_bound; ++c)
             {
                 final double th = (ceil_local_thresholds[c] + floor_local_thresholds[c]) / 2.0;
 
-                for (int r = frm.top; r <= frm.bottom; ++r)
-                    if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 0);
-                    else mat_bin.put(r, c, 255);
+                for (int r = str_ceil.bottom + 1; r < str_floor.top; ++r)
+                    if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 255);
             }
+
+            // CC search over partial image
 
             int max_cc_label = connectedComponents(mat_bin, cc_chart);
 
             Set<Integer> cc_touching_ceil = new HashSet<Integer>();
+            Set<Integer> cc_touching_floor = new HashSet<Integer>();
             Set<Integer> cc_touching_both = new HashSet<Integer>();
 
-            for (int c = frm.left; c <= frm.right; ++c)
-                cc_touching_ceil.add((int)cc_chart.get(frm.top, c)[0]);
-
-            for (int c = frm.left; c <= frm.right; ++c)
+            for (int c = frame_left_bound; c <= frame_right_bound; ++c)
             {
-                int val = (int) cc_chart.get(frm.top, c)[0];
+                cc_touching_ceil.add((int) cc_chart.get(str_ceil.bottom + 1, c)[0]);
+                cc_touching_floor.add((int) cc_chart.get(str_floor.top - 1, c)[0]);
+            }
 
-                if (cc_touching_ceil.contains(val))
-                {
+            Iterator it = cc_touching_ceil.iterator();
+
+            while (it.hasNext())
+            {
+                int val = (int)it.next();
+
+                if (cc_touching_floor.contains(val))
                     cc_touching_both.add(val);
-                }
             }
 
             int nb_bars = cc_touching_both.size();
@@ -962,7 +997,6 @@ public class GrayActivity extends AppCompatActivity {
 
 
         Utils.matToBitmap(mat_bin, img_out);
-
         ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
 
@@ -971,6 +1005,10 @@ public class GrayActivity extends AppCompatActivity {
         //System.out.println("OCR output over binary image:\n\n" + txt);
 
     }
+
+    ///////////////////////////////////////////
+    // Pseudo-luminance chart from RGB image //
+    ///////////////////////////////////////////
 
     private Mat MakeLPrime(Mat mat_rgb)
     {
@@ -1007,6 +1045,10 @@ public class GrayActivity extends AppCompatActivity {
 
         return mat_L_prime;
     }
+
+    //////////////////////////////////////
+    // Data handling for Tesseract user //
+    //////////////////////////////////////
 
     private void copyFiles() {
         try {
@@ -1051,6 +1093,10 @@ public class GrayActivity extends AppCompatActivity {
             }
         }
     }
+
+    ////////////////
+    // ZOI fusion //
+    ////////////////
 
     private boolean Custom_proximity_heuristic(android.graphics.Rect rct_ref, android.graphics.Rect rct_other)
     {
