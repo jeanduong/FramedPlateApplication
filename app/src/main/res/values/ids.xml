@@ -2,5 +2,4 @@
 <resources>
     <item name="display_view_name" type="id" />
     <item name="gray_display_view_name" type="id" />
-    <item name="ocr_rgb_output_view" type="id" />
 </resources>

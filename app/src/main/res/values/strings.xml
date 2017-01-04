@@ -1,5 +1,9 @@
 <resources>
-    <string name="app_name">OCRApplication</string>
-    <string name="display_view_label" type="id">Display area</string>
-    <string name="button_label">Make gray</string>
+    <string name="app_name">Lecture de plaque de firmes</string>
+    <string name="button_label">Extraire</string>
+    <string name="symbole_label_text">Symbole</string>
+    <string name="serial_label_text">Identifiant de série</string>
+    <string name="manufacturer_label_text">Identifiant de constructeur</string>
+    <string name="warranty_label_text">Durée de garantie</string>
+    <string name="commission_label_text">Date de mise en service</string>
 </resources>

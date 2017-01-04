@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.googlecode.tesseract.android.TessBaseAPI;
@@ -51,8 +52,12 @@ import static java.lang.Math.exp;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.opencv.core.Core.bitwise_not;
+import static org.opencv.imgproc.Imgproc.CC_STAT_LEFT;
+import static org.opencv.imgproc.Imgproc.CC_STAT_WIDTH;
 import static org.opencv.imgproc.Imgproc.MORPH_RECT;
 import static org.opencv.imgproc.Imgproc.connectedComponents;
+import static org.opencv.imgproc.Imgproc.connectedComponentsWithStats;
+import static org.opencv.imgproc.Imgproc.rectangle;
 
 public class GrayActivity extends AppCompatActivity {
     static final String TAG = "OCR over gray";
@@ -111,9 +116,6 @@ public class GrayActivity extends AppCompatActivity {
         // Setup //
         ///////////
 
-        // Bitmap is only needed to load image from ressources and create data array.
-        // It can be deleted after that, since only Mat objects will be used for processing
-
         Bitmap img_rgb = BitmapFactory.decodeResource(getResources(), R.drawable.balser);
 
         final int h = img_rgb.getHeight();
@@ -124,9 +126,9 @@ public class GrayActivity extends AppCompatActivity {
         img_rgb.recycle(); // May make the app crash
         //Imgproc.GaussianBlur(mat_rgb, mat_rgb, new Size(5, 5), 0.0); // Blur to remove some noise
 
-        ////////////////////////////////
-        // Leydier's pseudo-luminance //
-        ////////////////////////////////
+        //////////////////////
+        // Pseudo-luminance //
+        //////////////////////
 
         Imgproc.cvtColor(mat_rgb, mat_rgb, Imgproc.COLOR_BGR2RGB); // OpenCV color image are BGR!!!
         Mat mat_lprime = MakeLPrime(mat_rgb);
@@ -602,7 +604,7 @@ public class GrayActivity extends AppCompatActivity {
         //Utils.matToBitmap(mask, img_out);
         Utils.matToBitmap(mat_frankenstein, img_out);
 
-        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
+        //((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
         //////////////////////////////
         // Run OCR and extract data //
@@ -818,7 +820,9 @@ public class GrayActivity extends AppCompatActivity {
         // Retrieve frame for serial identifier //
         //////////////////////////////////////////
 
-        Mat cc_chart = new Mat(h, w, CvType.CV_8UC1);
+        Rect box_1, box_2, box_3, box_4, box_5, box_6;
+
+        Mat mat_CC_chart = new Mat(h, w, CvType.CV_8UC1);
 
         for (int k = 0; k < serial_candidate_zois.size(); ++k)
         {
@@ -865,6 +869,10 @@ public class GrayActivity extends AppCompatActivity {
 
             int frame_left_bound = rct.left;
             int frame_right_bound = rct.right;
+            int ceil_upper_bound = str_ceil.top;
+            int ceil_lower_bound = str_ceil.bottom;
+            int floor_upper_bound = str_floor.top;
+            int floor_lower_bound = str_floor.bottom;
 
             // Lateral expansion for frame
 
@@ -875,19 +883,19 @@ public class GrayActivity extends AppCompatActivity {
             {
                 expand = false;
 
-                int r = str_ceil.top;
+                int r = ceil_upper_bound;
                 double th = ceil_local_thresholds[c_backward];
 
-                while (!expand && (r <= str_ceil.bottom))
+                while (!expand && (r <= ceil_lower_bound))
                 {
                     expand = (mat_lprime.get(r, c_backward)[0] < th);
                     ++r;
                 }
 
-                r = str_floor.top;
+                r = floor_upper_bound;
                 th = floor_local_thresholds[c_backward];
 
-                while (!expand && (r <= str_floor.bottom))
+                while (!expand && (r <= floor_lower_bound))
                 {
                     expand = (mat_lprime.get(r, c_backward)[0] < th);
                     ++r;
@@ -908,19 +916,19 @@ public class GrayActivity extends AppCompatActivity {
             {
                 expand = false;
 
-                int r = str_ceil.top;
+                int r = ceil_upper_bound;
                 double th = ceil_local_thresholds[c_forward];
 
-                while (!expand && (r <= str_ceil.bottom))
+                while (!expand && (r <= ceil_lower_bound))
                 {
                     expand = (mat_lprime.get(r, c_forward)[0] < th);
                     ++r;
                 }
 
-                r = str_floor.top;
+                r = floor_upper_bound;
                 th = floor_local_thresholds[c_forward];
 
-                while (!expand && (r <= str_floor.bottom))
+                while (!expand && (r <= floor_lower_bound))
                 {
                     expand = (mat_lprime.get(r, c_forward)[0] < th);
                     ++r;
@@ -932,61 +940,158 @@ public class GrayActivity extends AppCompatActivity {
                     ++c_forward;
                     expand = (c_forward <= w - 1);
                 }
-
-
-                Log.d(TAG, "th    = " + th);
-
             }
 
-
-            Log.d(TAG, "left  = " + frame_left_bound);
-            Log.d(TAG, "right = " + frame_right_bound);
-            Log.d(TAG, "width = " + w);
-
             // Partial binary image
-            //
-            // Warning : FOREGROUND should be WHITE for component analysis with OpenCV!!!!!!!!!
 
+            // Warning : FOREGROUND should be WHITE for component analysis with OpenCV!!!!!!!!!
             mat_bin.setTo(new Scalar(0));
 
             for (int c = frame_left_bound; c <= frame_right_bound; ++c)
             {
                 final double th = (ceil_local_thresholds[c] + floor_local_thresholds[c]) / 2.0;
 
-                for (int r = str_ceil.bottom + 1; r < str_floor.top; ++r)
+                for (int r = ceil_lower_bound + 1; r < floor_upper_bound; ++r)
                     if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 255);
             }
 
             // CC search over partial image
 
-            int max_cc_label = connectedComponents(mat_bin, cc_chart);
+            Mat mat_CC_stats = new Mat();
+            Mat mat_CC_centroids = new Mat();
+
+            Imgproc.connectedComponentsWithStats(mat_bin, mat_CC_chart, mat_CC_stats, mat_CC_centroids);
+
+            // Collect CCs touching only ceil or floor
 
             Set<Integer> cc_touching_ceil = new HashSet<Integer>();
             Set<Integer> cc_touching_floor = new HashSet<Integer>();
             Set<Integer> cc_touching_both = new HashSet<Integer>();
 
-            for (int c = frame_left_bound; c <= frame_right_bound; ++c)
+            boolean touch_ceil = false;
+            boolean touch_floor = false;
+            double zone_height = floor_upper_bound - ceil_lower_bound;
+            double ceil_stream_thickness = ceil_lower_bound - ceil_upper_bound + 1;
+            double floor_stream_thickness = floor_lower_bound - floor_upper_bound + 1;
+
+            for (int c = 1; c < mat_CC_stats.height(); ++c) // Label 0 is for background
             {
-                cc_touching_ceil.add((int) cc_chart.get(str_ceil.bottom + 1, c)[0]);
-                cc_touching_floor.add((int) cc_chart.get(str_floor.top - 1, c)[0]);
+                int bbox_top = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_TOP)[0];
+                int bbox_height = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_HEIGHT)[0];
+
+                touch_ceil = (bbox_top == ceil_lower_bound + 1);
+                touch_floor = (bbox_top + bbox_height == floor_upper_bound);
+
+                if (touch_ceil && !touch_floor && (bbox_height < zone_height / 3.0) && (bbox_height > ceil_stream_thickness))
+                    cc_touching_ceil.add(c);
+
+                if (touch_floor && !touch_ceil && (bbox_height < zone_height / 3.0) && (bbox_height > floor_stream_thickness))
+                    cc_touching_floor.add(c);
+
+                if (touch_ceil && touch_floor)
+                    cc_touching_both.add(c);
             }
 
-            Iterator it = cc_touching_ceil.iterator();
+            if (cc_touching_ceil.size() == 5)
+                if (cc_touching_ceil.size() == cc_touching_floor.size())
+                {
+                    LinkedList<HorizontalSegment> upper_merlon_segments = new LinkedList<HorizontalSegment>();
+                    LinkedList<HorizontalSegment> lower_merlon_segments = new LinkedList<HorizontalSegment>();
+                    LinkedList<HorizontalSegment> bar_segments = new LinkedList<HorizontalSegment>();
 
-            while (it.hasNext())
-            {
-                int val = (int)it.next();
+                    Iterator it = cc_touching_ceil.iterator();
 
-                if (cc_touching_floor.contains(val))
-                    cc_touching_both.add(val);
-            }
+                    while (it.hasNext())
+                    {
+                        int id = (int)it.next();
+                        int x_begin = (int) mat_CC_stats.get(id, CC_STAT_LEFT)[0];
+                        int x_end = (int) mat_CC_stats.get(id, CC_STAT_WIDTH)[0];
+                        upper_merlon_segments.add(new HorizontalSegment(x_begin, x_end , ceil_lower_bound));
+                    }
 
-            int nb_bars = cc_touching_both.size();
+                    it = cc_touching_floor.iterator();
 
-            Log.d(TAG, "bars : " + nb_bars);
+                    while (it.hasNext())
+                    {
+                        int id = (int)it.next();
+                        int x_begin = (int) mat_CC_stats.get(id, CC_STAT_LEFT)[0];
+                        int x_end = (int) mat_CC_stats.get(id, CC_STAT_WIDTH)[0];
+                        lower_merlon_segments.add(new HorizontalSegment(x_begin, x_end , floor_upper_bound));
+                    }
+
+                    it = cc_touching_both.iterator();
+
+                    while (it.hasNext())
+                    {
+                        int id = (int)it.next();
+                        int x_begin = (int) mat_CC_stats.get(id, CC_STAT_LEFT)[0];
+                        int x_end = (int) mat_CC_stats.get(id, CC_STAT_WIDTH)[0];
+                        bar_segments.add(new HorizontalSegment(x_begin, x_end , 0));
+                    }
+
+                    HorizontalSegmentLeftComparator cmp = new HorizontalSegmentLeftComparator();
+                    Collections.sort(upper_merlon_segments, cmp);
+                    Collections.sort(lower_merlon_segments, cmp);
+                    Collections.sort(bar_segments, cmp);
+
+                    int x_begin = (int) max(upper_merlon_segments.get(0).getRight(), lower_merlon_segments.get(0).getRight());
+                    int x_end = (int) min(upper_merlon_segments.get(1).getLeft(), lower_merlon_segments.get(1).getLeft());
+                    box_1 = new Rect(x_begin, ceil_lower_bound, x_end - x_begin + 1, (int)zone_height);
+
+                    x_begin = (int) max(upper_merlon_segments.get(2).getRight(), lower_merlon_segments.get(2).getRight());
+                    x_end = (int) min(upper_merlon_segments.get(3).getLeft(), lower_merlon_segments.get(3).getLeft());
+                    box_4 = new Rect(x_begin, ceil_lower_bound, x_end - x_begin + 1, (int)zone_height);
+
+                    x_begin = (int) max(upper_merlon_segments.get(3).getRight(), lower_merlon_segments.get(3).getRight());
+                    x_end = (int) min(upper_merlon_segments.get(4).getLeft(), lower_merlon_segments.get(4).getLeft());
+                    box_5 = new Rect(x_begin, ceil_lower_bound, x_end - x_begin + 1, (int)zone_height);
+
+                    // Search bar closest to rightmost merlons to build box 6
+
+                    it = bar_segments.iterator();
+                    HorizontalSegment sg = bar_segments.getFirst();
+                    HorizontalSegment upper_ml = upper_merlon_segments.getLast();
+                    HorizontalSegment lower_ml = lower_merlon_segments.getLast();
+
+                    while (it.hasNext() && (sg.right < min(upper_ml.getLeft(), lower_ml.getLeft())))
+                        sg = (HorizontalSegment) it.next();
+
+                    x_begin = (int) max(upper_ml.getRight(), lower_ml.getRight());
+                    x_end = (int) sg.getLeft();
+                    box_6 = new Rect(x_begin, ceil_lower_bound, x_end - x_begin + 1, (int) zone_height);
+
+                    // Search bars between box 2 and 3
+
+                    LinkedList<HorizontalSegment> bar_separators = new LinkedList<HorizontalSegment>();
+
+                    double transition_range_left = max(upper_merlon_segments.get(1).getRight(), lower_merlon_segments.get(1).getRight());
+                    double transition_range_right = min(upper_merlon_segments.get(2).getLeft(), lower_merlon_segments.get(2).getLeft());
+
+                    it = bar_segments.iterator();
+
+                    while (it.hasNext())
+                    {
+                        HorizontalSegment hs = (HorizontalSegment) it.next();
+                        double hs_left = hs.getLeft();
+                        double hs_right = hs.getRight();
+
+                        if ((hs_left > transition_range_left) && (hs_right < transition_range_right))
+                            bar_separators.add(new HorizontalSegment(hs_left, hs_right, 0));
+                    }
+
+                    Log.d(TAG, "left    : " + transition_range_left);
+                    Log.d(TAG, "right   : " + transition_range_right);
+                    Log.d(TAG, "nb seps : " + bar_separators.size());
+
+                    Collections.sort(bar_separators, cmp);
+
+                    box_2 = new Rect((int) transition_range_left, ceil_lower_bound, (int) (bar_separators.getFirst().getLeft() - transition_range_left + 1), (int) zone_height);
+                    box_3 = new Rect((int) bar_separators.getLast().getRight(), ceil_lower_bound, (int) (transition_range_right - bar_separators.getLast().getRight() + 1), (int) zone_height);
+
+                    rectangle(mat_bin, new Point(0, ceil_upper_bound), new Point(box_1.left, floor_lower_bound), new Scalar(0), -1);
+                    rectangle(mat_bin, new Point(box_6.right, ceil_upper_bound), new Point(w - 1, floor_lower_bound), new Scalar(0), -1);
+                }
         }
-
-
 
         System.out.println("symbol          : " + symbole);
         System.out.println("serial id       : " + serial);
@@ -994,16 +1099,14 @@ public class GrayActivity extends AppCompatActivity {
         System.out.println("warranty        : " + warranty);
         System.out.println("commission      : " + commission);
 
-
-
         Utils.matToBitmap(mat_bin, img_out);
         ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
 
-
-        //img_gray.recycle(); // Sometimes make the app crash
-        // Print text in IDE output console
-        //System.out.println("OCR output over binary image:\n\n" + txt);
-
+        ((TextView) findViewById(R.id.symbole_content_id)).setText(symbole);
+        ((TextView) findViewById(R.id.serial_content_id)).setText(serial);
+        ((TextView) findViewById(R.id.manufacturer_content_id)).setText(manufacturer);
+        ((TextView) findViewById(R.id.warranty_content_id)).setText(warranty);
+        ((TextView) findViewById(R.id.commission_content_id)).setText(commission);
     }
 
     ///////////////////////////////////////////
@@ -1283,6 +1386,13 @@ class HorizontalSegmentOrdinateComparator implements Comparator<HorizontalSegmen
     @Override
     public int compare(HorizontalSegment s1, HorizontalSegment s2) {
         return (int)(s1.ordinate - s2.ordinate);
+    }
+}
+
+class HorizontalSegmentLeftComparator implements Comparator<HorizontalSegment>{
+    @Override
+    public int compare(HorizontalSegment s1, HorizontalSegment s2) {
+        return (int)(s1.left - s2.left);
     }
 }
 

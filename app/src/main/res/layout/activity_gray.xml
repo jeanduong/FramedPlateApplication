@@ -6,9 +6,96 @@
     android:layout_height="match_parent"
     tools:context="com.example.jeanduong.framedplateapplication.GrayActivity">
 
-    <ImageView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/gray_display_view_name" />
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:id="@+id/gray_display_view_name" />
+
+        <!-- symbole -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:paddingBottom="20dp"
+            android:id="@+id/symbole_label_id"
+            android:text="@string/symbole_label_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:id="@+id/symbole_content_id" />
+
+        <!-- serial -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:paddingBottom="20dp"
+            android:id="@+id/serial_label_id"
+            android:text="@string/serial_label_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:id="@+id/serial_content_id" />
+
+        <!-- manufacturer -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:paddingBottom="20dp"
+            android:id="@+id/manufacturer_label_id"
+            android:text="@string/manufacturer_label_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:id="@+id/manufacturer_content_id" />
+
+        <!-- warranty -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:paddingBottom="20dp"
+            android:id="@+id/warranty_label_id"
+            android:text="@string/warranty_label_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:id="@+id/warranty_content_id" />
+
+        <!-- commission -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:paddingBottom="20dp"
+            android:id="@+id/commission_label_id"
+            android:text="@string/commission_label_text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="20dp"
+            android:id="@+id/commission_content_id" />
+
+    </LinearLayout>>
 
 </RelativeLayout>

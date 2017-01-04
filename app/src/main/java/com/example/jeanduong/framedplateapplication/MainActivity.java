@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
     String datapath = ""; //path to folder containing language data file
     String lang = "fra";
 
-    final String TAG = "OCR over RGB";
+    final String TAG = "OCR over RGB source image";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
