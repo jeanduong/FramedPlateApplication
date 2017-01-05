@@ -29,6 +29,7 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.features2d.FeatureDetector;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.imgproc.LineSegmentDetector;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -185,7 +186,7 @@ public class GrayActivity extends AppCompatActivity {
         // Edge detection //
         ////////////////////
 
-        Mat mat_edges = new Mat(h, w, CvType.CV_8UC1);
+        Mat mat_Canny_edges = new Mat(h, w, CvType.CV_8UC1);
 
         // Use Canny edge detector (keep only sites with values "around average luminance")
 
@@ -198,7 +199,7 @@ public class GrayActivity extends AppCompatActivity {
         double th_low = lprime_mean - lprime_dev;
         double th_high = lprime_mean + lprime_dev;
 
-        Imgproc.Canny(mat_lprime, mat_edges, th_low, th_high);
+        Imgproc.Canny(mat_lprime, mat_Canny_edges, th_low, th_high);
 
         //////////////////////////
         // Hough line detection //
@@ -223,67 +224,67 @@ public class GrayActivity extends AppCompatActivity {
 
         for (int r = 0; r < h; ++r)
             for (int c = 0; c < w; ++c)
-                if (mat_edges.get(r, c)[0] > 0.0)
+                if (mat_Canny_edges.get(r, c)[0] > 0.0)
                     if (-mat_dy.get(r, c)[0] > 4 * abs(mat_dx.get(r, c)[0]))
                         mat_seeds.put(r, c, 255);
 
-        Mat h_neg_segments = new Mat(h, w, CvType.CV_8UC1);
+        Mat mat_neg_segments = new Mat();
 
-        Imgproc.HoughLinesP(mat_seeds, h_neg_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
+        Imgproc.HoughLinesP(mat_seeds, mat_neg_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
 
         // Seeds for gradient "rather vertical" and down oriented (positive)
         mat_seeds.setTo(new Scalar(0));
 
         for (int r = 0; r < h; ++r)
             for (int c = 0; c < w; ++c)
-                if (mat_edges.get(r, c)[0] > 0.0)
+                if (mat_Canny_edges.get(r, c)[0] > 0.0)
                     if (mat_dy.get(r, c)[0] > 4 * abs(mat_dx.get(r, c)[0]))
                         mat_seeds.put(r, c, 255);
 
-        Mat h_pos_segments = new Mat(h, w, CvType.CV_8UC1);
+        Mat mat_pos_segments = new Mat();
 
-        Imgproc.HoughLinesP(mat_seeds, h_pos_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
+        Imgproc.HoughLinesP(mat_seeds, mat_pos_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
 
         // Post-processing: force perfectly horizontal lines
 
-        LinkedList<HorizontalSegment> negative_segments = new LinkedList<HorizontalSegment>();
-        LinkedList<HorizontalSegment> positive_segments = new LinkedList<HorizontalSegment>();
+        LinkedList<HorizontalSegment> negative_h_segments = new LinkedList<HorizontalSegment>();
+        LinkedList<HorizontalSegment> positive_h_segments = new LinkedList<HorizontalSegment>();
 
-        for (int k = 0 ; k < h_neg_segments.rows(); ++k)
+        for (int k = 0 ; k < mat_neg_segments.rows(); ++k)
         {
-            double[] vec = h_neg_segments.get(k, 0);
+            double[] vec = mat_neg_segments.get(k, 0);
 
-             negative_segments.add(new HorizontalSegment(vec[0], vec[2], (int)((vec[1] + vec[3]) / 2.0)));
+             negative_h_segments.add(new HorizontalSegment(vec[0], vec[2], (int)((vec[1] + vec[3]) / 2.0)));
         }
 
-        Collections.sort(negative_segments, new HorizontalSegmentOrdinateComparator());
+        Collections.sort(negative_h_segments, new HorizontalSegmentOrdinateComparator());
 
-        for (int k = 0 ; k < h_pos_segments.rows(); ++k)
+        for (int k = 0 ; k < mat_pos_segments.rows(); ++k)
         {
-            double[] vec = h_pos_segments.get(k, 0);
+            double[] vec = mat_pos_segments.get(k, 0);
 
-            positive_segments.add(new HorizontalSegment(vec[0], vec[2], (int)((vec[1] + vec[3]) / 2.0)));
+            positive_h_segments.add(new HorizontalSegment(vec[0], vec[2], (int)((vec[1] + vec[3]) / 2.0)));
         }
 
-        Collections.sort(positive_segments, new HorizontalSegmentOrdinateComparator());
+        Collections.sort(positive_h_segments, new HorizontalSegmentOrdinateComparator());
 
-        Log.d(TAG, "Hough detector : " + h_pos_segments.rows() + " positive line(s) found (" + positive_segments.size() + " horizontal)");
-        Log.d(TAG, "Hough detector : " + h_neg_segments.rows() + " negative line(s) found (" + negative_segments.size() + " horizontal)");
+        Log.d(TAG, "Hough detector : " + mat_pos_segments.rows() + " positive line(s) found (" + positive_h_segments.size() + " horizontal segments)");
+        Log.d(TAG, "Hough detector : " + mat_neg_segments.rows() + " negative line(s) found (" + negative_h_segments.size() + " horizontal segments)");
 
         ////////////////////////
         // Make solid streams //
         ////////////////////////
 
-        LinkedList<Rect> solid_streams = new LinkedList<Rect>();
-        boolean[] free_flags = new boolean[h_pos_segments.rows()];
+        LinkedList<Rect> lateral_solid_streams = new LinkedList<Rect>();
+        boolean[] free_flags = new boolean[mat_pos_segments.rows()];
 
         Arrays.fill(free_flags, true);
         double ordinate_floor = 0;
 
         // Try each up-oriented segment
-        for (int n = 0; n < negative_segments.size(); ++n)
+        for (int n = 0; n < negative_h_segments.size(); ++n)
         {
-            HorizontalSegment neg_seg = negative_segments.get(n);
+            HorizontalSegment neg_seg = negative_h_segments.get(n);
             double neg_ord = neg_seg.getOrdinate();
 
             if (neg_ord > ordinate_floor)
@@ -295,11 +296,11 @@ public class GrayActivity extends AppCompatActivity {
                 int id_closest = -1;
                 double smallest_distance = Double.POSITIVE_INFINITY;
 
-                for (int p = 0; p < positive_segments.size(); ++p)
+                for (int p = 0; p < positive_h_segments.size(); ++p)
                 {
                     if (free_flags[p])
                     {
-                        HorizontalSegment pos_seg = positive_segments.get(p);
+                        HorizontalSegment pos_seg = positive_h_segments.get(p);
                         double pos_ord = pos_seg.getOrdinate();
 
                         if (pos_ord > neg_ord)
@@ -323,21 +324,21 @@ public class GrayActivity extends AppCompatActivity {
                 // Found candidate
                 if ((id_closest >= 0) && (smallest_distance < 2 * mser_size_med))
                 {
-                    HorizontalSegment pos_seg = positive_segments.get(id_closest);
+                    HorizontalSegment pos_seg = positive_h_segments.get(id_closest);
                     int pos_ord = (int)pos_seg.getOrdinate();
 
-                    solid_streams.add(new Rect(0, (int) neg_ord, w - 1, pos_ord));
+                    lateral_solid_streams.add(new Rect(0, (int) neg_ord, w - 1, pos_ord));
                     free_flags[id_closest] = false;
                     ordinate_floor = pos_ord;
                 }
             }
         }
 
-        Log.i(TAG, "Solid streams : " + solid_streams.size());
+        Log.i(TAG, "Lateral solid streams : " + lateral_solid_streams.size());
 
-        solid_streams = Gather_intersection_ultimate(solid_streams);
+        lateral_solid_streams = Gather_intersection_ultimate(lateral_solid_streams);
 
-        Log.i(TAG, "Solid streams : " + solid_streams.size() + " (after fusion)");
+        Log.i(TAG, "Lateral solid streams : " + lateral_solid_streams.size() + " (after fusion)");
 
         ///////////////////////////////////
         // Combination with MSER regions //
@@ -349,9 +350,9 @@ public class GrayActivity extends AppCompatActivity {
         Arrays.fill(overlap_areas, 0);
         Arrays.fill(overlap_argmax, 0);
 
-        for (int s = 1; s < solid_streams.size(); ++s)
+        for (int s = 1; s < lateral_solid_streams.size(); ++s)
         {
-            Rect r = new Rect(0, solid_streams.get(s - 1).bottom, w - 1, solid_streams.get(s).top);
+            Rect r = new Rect(0, lateral_solid_streams.get(s - 1).bottom, w - 1, lateral_solid_streams.get(s).top);
 
             for (int m = 0; m < mser_zois.size(); ++m)
             {
@@ -377,22 +378,22 @@ public class GrayActivity extends AppCompatActivity {
             Rect rct = mser_zois.get(m);
             int id = overlap_argmax[m];
 
-            text_zois.add(new Rect(rct.left, solid_streams.get(id).bottom,
-                    rct.right, solid_streams.get(id + 1).top));
+            text_zois.add(new Rect(rct.left, lateral_solid_streams.get(id).bottom,
+                    rct.right, lateral_solid_streams.get(id + 1).top));
         }
 
         /////////////////////////////////////////////////
         // Binarization thresholds along solid streams //
         /////////////////////////////////////////////////
 
-        Collections.sort(solid_streams, new RectTopComparator());
+        Collections.sort(lateral_solid_streams, new RectTopComparator());
 
         LinkedList<Rect> extended_streams = new LinkedList<Rect>();
         LinkedList<double[]> local_thresholds = new LinkedList<double[]>();
 
-        for (int k = 0; k < solid_streams.size(); ++k)
+        for (int k = 0; k < lateral_solid_streams.size(); ++k)
         {
-            Rect str = solid_streams.get(k);
+            Rect str = lateral_solid_streams.get(k);
             double[] thresholds = new double[w];
 
             Arrays.fill(thresholds, 0);
@@ -566,22 +567,23 @@ public class GrayActivity extends AppCompatActivity {
             }
         }
 
+        // Mask to avoid processing ouside ZOIs
         Mat mask = new Mat(h, w, CvType.CV_8UC1, new Scalar(0));
 
         for (int k = 0; k < text_zois.size(); ++k)
         {
             Rect rct = text_zois.get(k);
 
-            for (int r = rct.top; r <= rct.bottom; ++r)
-                for (int c = rct.left; c <= rct.right; ++c)
-                    mask.put(r, c, 255);
+            rectangle(mask, new Point(rct.left, rct.top), new Point(rct.right, rct.bottom), new Scalar(255), -1);
         }
 
         Mat mat_frankenstein = new Mat(h, w, CvType.CV_8UC1, new Scalar(255));
 
-        mat_bin.copyTo(mat_frankenstein, mask);
+        mat_bin.copyTo(mat_frankenstein, mask); // "Simplified" binary image with ZOIs only
+        mat_frankenstein.copyTo(mat_bin); // Duplicate simplified image
 
-        mat_frankenstein.copyTo(mat_bin);
+        // Morphology in simplified image: only horizontal rules should remain
+        // Background-foreground swap required by OpenCV
         bitwise_not(mat_frankenstein, mat_frankenstein);
 
         Mat lateralStructure = Imgproc.getStructuringElement(MORPH_RECT, new Size(3 * (int)mser_size_med, 1));
@@ -589,22 +591,18 @@ public class GrayActivity extends AppCompatActivity {
         Imgproc.erode(mat_frankenstein, mat_frankenstein, lateralStructure, new Point(-1, -1), 1);
         Imgproc.dilate(mat_frankenstein, mat_frankenstein, lateralStructure, new Point(-1, -1), 1);
 
-        bitwise_not(mat_frankenstein, mask);
+        lateralStructure.release();
+        bitwise_not(mat_frankenstein, mask); // Create mask with what remains of simplified image
 
-        mat_bin.copyTo(mat_frankenstein, mask);
-
+        mat_bin.copyTo(mat_frankenstein, mask); // Copy cloned simplified image using mask
+                                                // (horizontal rules should disappear)
         ///////////////////////
         // Display new image //
         ///////////////////////
 
-        Bitmap img_out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        //Utils.matToBitmap(mat_lprime, img_out);
-        //Utils.matToBitmap(mat_edges, img_out);
-        //Utils.matToBitmap(mat_bin, img_out);
-        //Utils.matToBitmap(mask, img_out);
-        Utils.matToBitmap(mat_frankenstein, img_out);
+        Bitmap img_to_read = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
 
-        //((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
+        Utils.matToBitmap(mat_frankenstein, img_to_read);
 
         //////////////////////////////
         // Run OCR and extract data //
@@ -617,7 +615,7 @@ public class GrayActivity extends AppCompatActivity {
         checkFile(new File(datapath + "tessdata/"));
 
         tess_engine.init(datapath, lang);
-        tess_engine.setImage(img_out);
+        tess_engine.setImage(img_to_read);
 
         // Arrange zones to retrieve text lines (with reading order for data extraction)
         LinkedList<LinkedList<Rect>> ordered_text_zois = LexicographicAntichains(text_zois);
@@ -835,11 +833,11 @@ public class GrayActivity extends AppCompatActivity {
             int id_ceil = 0;
             int id_floor = 0;
 
-            // Catch the solid streams "containing" candidate ZOI.
+            // Catch the solid streams "embedding" candidate ZOI.
 
-            for (int s = 0; s < solid_streams.size(); ++s)
+            for (int s = 0; s < lateral_solid_streams.size(); ++s)
             {
-                Rect str = solid_streams.get(s);
+                Rect str = lateral_solid_streams.get(s);
 
                 if (str.top < top)
                 {
@@ -861,8 +859,8 @@ public class GrayActivity extends AppCompatActivity {
                 }
             }
 
-            Rect str_ceil = solid_streams.get(id_ceil);
-            Rect str_floor = solid_streams.get(id_floor);
+            Rect str_ceil = lateral_solid_streams.get(id_ceil);
+            Rect str_floor = lateral_solid_streams.get(id_floor);
 
             double[] ceil_local_thresholds = local_thresholds.get(id_ceil);
             double[] floor_local_thresholds = local_thresholds.get(id_floor);
@@ -871,11 +869,13 @@ public class GrayActivity extends AppCompatActivity {
             int frame_right_bound = rct.right;
             int ceil_upper_bound = str_ceil.top;
             int ceil_lower_bound = str_ceil.bottom;
+            int ceil_stream_thickness = str_ceil.height();
             int floor_upper_bound = str_floor.top;
             int floor_lower_bound = str_floor.bottom;
+            int floor_stream_thickness = str_floor.height();
 
             // Lateral expansion for frame
-
+/*
             boolean expand = (frame_left_bound > 0);
             int c_backward = frame_left_bound - 1;
 
@@ -941,20 +941,194 @@ public class GrayActivity extends AppCompatActivity {
                     expand = (c_forward <= w - 1);
                 }
             }
+*/
+
+            // Create mask for ZOI
+            mask.setTo(new Scalar(0));
+            rectangle(mask, new Point(0, ceil_upper_bound), new Point(w - 1, floor_lower_bound), new Scalar(255), -1);
+
+            mat_bin.setTo(new Scalar(255));
+            mat_frankenstein.copyTo(mat_bin, mask);
+            bitwise_not(mat_bin, mat_bin);
+
+            // Search connected component within ZOI
+            Mat mat_CC_stats = new Mat();
+            Mat mat_CC_centroids = new Mat();
+
+            Imgproc.connectedComponentsWithStats(mat_bin, mat_CC_chart, mat_CC_stats, mat_CC_centroids);
+
+            // Set area of connected component bounding box to false
+            // in mask if it doesn't meet ceil and floor
+            for (int c = 1; c < mat_CC_stats.height(); ++c)
+            {
+                int bbox_top = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_TOP)[0];
+                int bbox_height = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_HEIGHT)[0];
+
+                if ((bbox_top > ceil_lower_bound) && (bbox_top + bbox_height < floor_upper_bound))
+                {
+                    int bbox_left = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_LEFT)[0];
+                    int bbox_width = (int) mat_CC_stats.get(c, Imgproc.CC_STAT_WIDTH)[0];
+                    rectangle(mask, new Point(bbox_left, bbox_top), new Point(bbox_left + bbox_width - 1, bbox_top + bbox_height - 1), new Scalar(0), -1);
+                }
+            }
+
+            significant_nb_intersections = rct.height() / 10; // ???
+            segment_min_length = rct.height() / 2;//max(ceil_stream_thickness, floor_stream_thickness);
+            segment_max_gap = segment_min_length;
+
+            // Seeds for gradient "rather lateral" and left oriented (negative)
+            mat_seeds.setTo(new Scalar(0));
+
+            for (int r = 0; r < h; ++r)
+                for (int c = 0; c < w; ++c)
+                    if (mask.get(r, c)[0] > 0)
+                        if (mat_Canny_edges.get(r, c)[0] > 0.0)
+                            if (-mat_dx.get(r, c)[0] > 4 * abs(mat_dy.get(r, c)[0]))
+                                mat_seeds.put(r, c, 255);
+
+            mat_neg_segments = new Mat();//(h, w, CvType.CV_8UC1);
+
+            Imgproc.HoughLinesP(mat_seeds, mat_neg_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
+
+            // Seeds for gradient "rather lateral" and right oriented (positive)
+            mat_seeds.setTo(new Scalar(0));
+
+            for (int r = 0; r < h; ++r)
+                for (int c = 0; c < w; ++c)
+                    if (mat_Canny_edges.get(r, c)[0] > 0.0)
+                        if (mask.get(r, c)[0] > 0)
+                            if (mat_dx.get(r, c)[0] > 4 * abs(mat_dy.get(r, c)[0]))
+                                mat_seeds.put(r, c, 255);
+
+            mat_pos_segments = new Mat();//(h, w, CvType.CV_8UC1);
+
+            Imgproc.HoughLinesP(mat_seeds, mat_pos_segments, distance_res, angle_res, significant_nb_intersections, segment_min_length, segment_max_gap);
+
+            // Create vertical segments
+            LinkedList<VerticalSegment> negative_v_segments = new LinkedList<VerticalSegment>();
+            LinkedList<VerticalSegment> positive_v_segments = new LinkedList<VerticalSegment>();
+
+            for (int s = 0 ; s < mat_neg_segments.rows(); ++s)
+            {
+                double[] vec = mat_neg_segments.get(s, 0);
+
+                negative_v_segments.add(new VerticalSegment(vec[1], vec[3], (int)((vec[0] + vec[2]) / 2.0)));
+            }
+
+            Collections.sort(negative_v_segments, new VerticalSegmentAbscissaComparator());
+
+            for (int s = 0 ; s < mat_pos_segments.rows(); ++s)
+            {
+                double[] vec = mat_pos_segments.get(s, 0);
+
+                positive_v_segments.add(new VerticalSegment(vec[1], vec[3], (int)((vec[0] + vec[2]) / 2.0)));
+            }
+
+            Collections.sort(positive_v_segments, new VerticalSegmentAbscissaComparator());
+
+            Log.d(TAG, "Hough detector : " + mat_pos_segments.rows() + " positive line(s) found (" + positive_v_segments.size() + " vertical segments)");
+            Log.d(TAG, "Hough detector : " + mat_neg_segments.rows() + " negative line(s) found (" + negative_v_segments.size() + " vertical segments)");
+
+            // Make vertical solid streams
+            LinkedList<Rect> vertical_solid_streams = new LinkedList<Rect>();
+            boolean[] local_free_flags = new boolean[mat_pos_segments.rows()];
+
+            Arrays.fill(local_free_flags, true);
+            double abscissa_floor = 0;
+            int th_thickness = 2 * max(ceil_stream_thickness, floor_stream_thickness);
+
+            // Try each left-oriented segment
+            for (int n = 0; n < negative_v_segments.size(); ++n)
+            {
+                VerticalSegment neg_seg = negative_v_segments.get(n);
+                double neg_abs = neg_seg.getAbscissa();
+
+                if (neg_abs > abscissa_floor)
+                {
+                    double neg_top = neg_seg.getTop();
+                    double neg_bottom = neg_seg.getBottom();
+
+                    // Search the closest right-oriented segment
+                    int id_closest = -1;
+                    double smallest_distance = Double.POSITIVE_INFINITY;
+
+                    for (int p = 0; p < positive_v_segments.size(); ++p)
+                    {
+                        if (local_free_flags[p])
+                        {
+                            VerticalSegment pos_seg = positive_v_segments.get(p);
+                            double pos_abs = pos_seg.getAbscissa();
+
+                            if (pos_abs > neg_abs)
+                            {
+                                double distance = pos_abs - neg_abs + 1;
+                                double pos_top = pos_seg.getTop();
+                                double pos_bottom = pos_seg.getBottom();
+
+                                if ((distance < smallest_distance) &&
+                                        (((pos_top > neg_top) && (pos_top < neg_bottom)) ||
+                                                ((pos_bottom > neg_top) && (pos_bottom < neg_bottom))))
+                                {
+                                    smallest_distance = distance;
+                                    id_closest = p;
+                                }
+                            } else
+                                local_free_flags[p] = false;
+                        }
+                    }
+
+                    // Found candidate
+                    if ((id_closest >= 0) && (smallest_distance < th_thickness))
+                    {
+                        VerticalSegment pos_seg = positive_v_segments.get(id_closest);
+                        int pos_abs = (int)pos_seg.getAbscissa();
+
+                        vertical_solid_streams.add(new Rect((int) neg_abs, ceil_lower_bound, pos_abs, floor_upper_bound));
+                        local_free_flags[id_closest] = false;
+                        abscissa_floor = pos_abs;
+                    }
+                }
+            }
+
+            Log.i(TAG, "Vertical solid streams : " + vertical_solid_streams.size());
+
+            vertical_solid_streams = Gather_intersection_ultimate(vertical_solid_streams);
+
+            Log.i(TAG, "Vertical solid streams : " + vertical_solid_streams.size() + " (after fusion)");
+
+
+
+
+
 
             // Partial binary image
-
+/*
             // Warning : FOREGROUND should be WHITE for component analysis with OpenCV!!!!!!!!!
-            mat_bin.setTo(new Scalar(0));
+            mat_frankenstein.setTo(new Scalar(0)); // Reuse matrices
 
             for (int c = frame_left_bound; c <= frame_right_bound; ++c)
             {
                 final double th = (ceil_local_thresholds[c] + floor_local_thresholds[c]) / 2.0;
 
                 for (int r = ceil_lower_bound + 1; r < floor_upper_bound; ++r)
-                    if (mat_lprime.get(r, c)[0] < th) mat_bin.put(r, c, 255);
+                    if (mat_lprime.get(r, c)[0] < th) mat_frankenstein.put(r, c, 255);
             }
 
+
+
+            Mat verticalStructure = Imgproc.getStructuringElement(MORPH_RECT, new Size(1, max(ceil_stream_thickness, floor_stream_thickness)));
+
+            Imgproc.erode(mat_frankenstein, mat_frankenstein, verticalStructure, new Point(-1, -1), 1);
+
+            verticalStructure.release();
+*/
+
+
+
+
+
+
+/*
             // CC search over partial image
 
             Mat mat_CC_stats = new Mat();
@@ -971,8 +1145,6 @@ public class GrayActivity extends AppCompatActivity {
             boolean touch_ceil = false;
             boolean touch_floor = false;
             double zone_height = floor_upper_bound - ceil_lower_bound;
-            double ceil_stream_thickness = ceil_lower_bound - ceil_upper_bound + 1;
-            double floor_stream_thickness = floor_lower_bound - floor_upper_bound + 1;
 
             for (int c = 1; c < mat_CC_stats.height(); ++c) // Label 0 is for background
             {
@@ -1091,6 +1263,7 @@ public class GrayActivity extends AppCompatActivity {
                     rectangle(mat_bin, new Point(0, ceil_upper_bound), new Point(box_1.left, floor_lower_bound), new Scalar(0), -1);
                     rectangle(mat_bin, new Point(box_6.right, ceil_upper_bound), new Point(w - 1, floor_lower_bound), new Scalar(0), -1);
                 }
+            */
         }
 
         System.out.println("symbol          : " + symbole);
@@ -1099,9 +1272,9 @@ public class GrayActivity extends AppCompatActivity {
         System.out.println("warranty        : " + warranty);
         System.out.println("commission      : " + commission);
 
-        Utils.matToBitmap(mat_bin, img_out);
-        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_out);
+        Utils.matToBitmap(mat_bin, img_to_read);
 
+        ((ImageView) findViewById(R.id.gray_display_view_name)).setImageBitmap(img_to_read);
         ((TextView) findViewById(R.id.symbole_content_id)).setText(symbole);
         ((TextView) findViewById(R.id.serial_content_id)).setText(serial);
         ((TextView) findViewById(R.id.manufacturer_content_id)).setText(manufacturer);
@@ -1386,6 +1559,13 @@ class HorizontalSegmentOrdinateComparator implements Comparator<HorizontalSegmen
     @Override
     public int compare(HorizontalSegment s1, HorizontalSegment s2) {
         return (int)(s1.ordinate - s2.ordinate);
+    }
+}
+
+class VerticalSegmentAbscissaComparator implements Comparator<VerticalSegment>{
+    @Override
+    public int compare(VerticalSegment s1, VerticalSegment s2) {
+        return (int)(s1.abscissa - s2.abscissa);
     }
 }
 
